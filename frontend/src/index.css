@@ -1,0 +1,10 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Chatify: squared message bubbles with slightly rounded corners.
+   Overrides daisyUI's default pill-shaped .chat-bubble while keeping
+   its color theming intact. */
+.chat-bubble {
+  border-radius: 0.5rem !important;
+}
