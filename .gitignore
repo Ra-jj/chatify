@@ -24,3 +24,6 @@ dist-ssr
 *.sw?
 
 .env
+
+# Personal files
+INTERVIEW_GUIDE.md
