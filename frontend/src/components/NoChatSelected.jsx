@@ -3,7 +3,7 @@ import Logo from "./Logo";
 const NoChatSelected = () => {
   return (
     <div 
-      className="w-full flex flex-1 flex-col items-center justify-center p-16 relative overflow-hidden"
+      className="hidden sm:flex w-full flex-1 flex-col items-center justify-center p-16 relative overflow-hidden"
       style={{ 
         backgroundImage: "url('/doodle-bg.png')", 
         backgroundRepeat: "repeat",

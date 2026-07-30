@@ -21,14 +21,14 @@ const Sidebar = () => {
   if (isUsersLoading) return <SidebarSkeleton />;
 
   return (
-    <aside className="h-full w-20 lg:w-72 border-r border-base-300 flex flex-col transition-all duration-200">
+    <aside className={`h-full border-r border-base-300 flex flex-col transition-all duration-200 ${selectedUser ? "hidden sm:flex sm:w-72 lg:w-72" : "w-full sm:w-72 lg:w-72"}`}>
       <div className="border-b border-base-300 w-full p-5">
         <div className="flex items-center gap-2">
           <Users className="size-6" />
-          <span className="font-medium hidden lg:block">Contacts</span>
+          <span className="font-medium">Contacts</span>
         </div>
 
-        <div className="mt-3 hidden lg:flex items-center gap-2">
+        <div className="mt-3 flex items-center gap-2">
           <label className="cursor-pointer flex items-center gap-2">
             <input
               type="checkbox"
@@ -67,8 +67,8 @@ const Sidebar = () => {
               )}
             </div>
 
-            {/* User info - only visible on larger screens */}
-            <div className="hidden lg:flex justify-between items-center w-full min-w-0">
+            {/* User info */}
+            <div className="flex justify-between items-center w-full min-w-0">
               <div className="text-left min-w-0">
                 <div className="font-medium truncate">{user.fullName}</div>
                 <div className="text-sm text-zinc-400">
@@ -77,14 +77,6 @@ const Sidebar = () => {
               </div>
               {user.unreadCount > 0 && (
                 <div className="badge badge-error badge-sm">
-                  {user.unreadCount}
-                </div>
-              )}
-            </div>
-            {/* Unread badge for mobile */}
-            <div className="lg:hidden absolute top-0 right-0">
-               {user.unreadCount > 0 && (
-                <div className="badge badge-error badge-xs">
                   {user.unreadCount}
                 </div>
               )}
