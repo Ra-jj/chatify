@@ -5,7 +5,7 @@ import SidebarSkeleton from "./skeletons/SidebarSkeleton";
 import { Users } from "lucide-react";
 
 const Sidebar = () => {
-  const { getUsers, users, selectedUser, setSelectedUser, isUsersLoading } = useChatStore();
+  const { getUsers, users, selectedUser, setSelectedUser, isUsersLoading, setSelectedProfileUser } = useChatStore();
 
   const { onlineUsers } = useAuthStore();
   const [showOnlineOnly, setShowOnlineOnly] = useState(false);
@@ -53,11 +53,17 @@ const Sidebar = () => {
               ${selectedUser?._id === user._id ? "bg-base-300 ring-1 ring-base-300" : ""}
             `}
           >
-            <div className="relative mx-auto lg:mx-0">
+            <div 
+              className="relative mx-auto lg:mx-0 cursor-pointer"
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedProfileUser(user);
+              }}
+            >
               <img
                 src={user.profilePic || "/avatar.png"}
                 alt={user.fullName}
-                className="size-12 object-cover rounded-full"
+                className="size-12 object-cover rounded-full hover:opacity-80 transition-opacity"
               />
               {onlineUsers.includes(user._id) && (
                 <span

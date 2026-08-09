@@ -24,6 +24,10 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+    sessionId: {
+      type: String,
+      default: "",
+    },
   },
   { timestamps: true }
 );

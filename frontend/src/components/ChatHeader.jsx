@@ -4,7 +4,7 @@ import { useChatStore } from "../store/useChatStore";
 import { formatLastSeen } from "../lib/utils";
 
 const ChatHeader = () => {
-  const { selectedUser, setSelectedUser, typingUsers, searchQuery, setSearchQuery } = useChatStore();
+  const { selectedUser, setSelectedUser, typingUsers, searchQuery, setSearchQuery, setSelectedProfileUser } = useChatStore();
   const { onlineUsers } = useAuthStore();
 
   return (
@@ -19,23 +19,29 @@ const ChatHeader = () => {
             <ArrowLeft className="size-5" />
           </button>
 
-          {/* Avatar */}
-          <div className="avatar">
-            <div className="size-10 rounded-full relative">
-              <img src={selectedUser.profilePic || "/avatar.png"} alt={selectedUser.fullName} />
+          {/* Clickable Profile Info */}
+          <div 
+            className="flex items-center gap-3 cursor-pointer hover:bg-base-300 p-2 rounded-lg transition-colors"
+            onClick={() => setSelectedProfileUser(selectedUser)}
+          >
+            {/* Avatar */}
+            <div className="avatar">
+              <div className="size-10 rounded-full relative">
+                <img src={selectedUser.profilePic || "/avatar.png"} alt={selectedUser.fullName} />
+              </div>
             </div>
-          </div>
 
-          {/* User info */}
-          <div>
-            <h3 className="font-medium">{selectedUser.fullName}</h3>
-            <p className="text-sm text-base-content/70">
-              {typingUsers?.includes(selectedUser._id) 
-                ? <span className="text-emerald-500 italic">typing...</span> 
-                : onlineUsers.includes(selectedUser._id) 
-                  ? "Online" 
-                  : formatLastSeen(selectedUser.lastSeen)}
-            </p>
+            {/* User info */}
+            <div>
+              <h3 className="font-medium">{selectedUser.fullName}</h3>
+              <p className="text-sm text-base-content/70">
+                {typingUsers?.includes(selectedUser._id) 
+                  ? <span className="text-emerald-500 italic">typing...</span> 
+                  : onlineUsers.includes(selectedUser._id) 
+                    ? "Online" 
+                    : formatLastSeen(selectedUser.lastSeen)}
+              </p>
+            </div>
           </div>
         </div>
 

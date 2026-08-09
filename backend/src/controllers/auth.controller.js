@@ -2,6 +2,8 @@ import { generateToken } from "../lib/utils.js";
 import User from "../models/user.model.js";
 import bcrypt from "bcryptjs";
 import cloudinary from "../lib/cloudinary.js";
+import { userSocketMap } from "../lib/socket.js";
+import crypto from "crypto";
 
 export const signup = async (req, res) => {
   const { fullName, email, password } = req.body;
@@ -21,15 +23,18 @@ export const signup = async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
+    const sessionId = crypto.randomUUID();
+
     const newUser = new User({
       fullName,
       email,
       password: hashedPassword,
+      sessionId,
     });
 
     if (newUser) {
       // generate jwt token here
-      generateToken(newUser._id, res);
+      generateToken(newUser._id, res, sessionId);
       await newUser.save();
 
       res.status(201).json({
@@ -62,7 +67,16 @@ export const login = async (req, res) => {
       return res.status(400).json({ message: "Invalid credentials" });
     }
 
-    generateToken(user._id, res);
+    // Single Active Session check
+    if (userSocketMap[user._id.toString()]) {
+      return res.status(400).json({ message: "Account is currently active on another device." });
+    }
+
+    const sessionId = crypto.randomUUID();
+    user.sessionId = sessionId;
+    await user.save();
+
+    generateToken(user._id, res, sessionId);
 
     res.status(200).json({
       _id: user._id,
@@ -77,8 +91,11 @@ export const login = async (req, res) => {
   }
 };
 
-export const logout = (req, res) => {
+export const logout = async (req, res) => {
   try {
+    if (req.user) {
+      await User.findByIdAndUpdate(req.user._id, { sessionId: "" });
+    }
     res.cookie("jwt", "", { maxAge: 0 });
     res.status(200).json({ message: "Logged out successfully" });
   } catch (error) {

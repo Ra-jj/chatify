@@ -7,6 +7,7 @@ export const useChatStore = create((set, get) => ({
   messages: [],
   users: [],
   selectedUser: null,
+  selectedProfileUser: null,
   typingUsers: [],
   isUsersLoading: false,
   isMessagesLoading: false,
@@ -66,13 +67,21 @@ export const useChatStore = create((set, get) => ({
     }
   },
 
-  deleteMessage: async (messageId) => {
+  deleteMessage: async (messageId, type) => {
     try {
-      await axiosInstance.delete(`/messages/${messageId}`);
-      set((state) => ({
-        messages: state.messages.filter((message) => message._id !== messageId),
-      }));
-      toast.success("Message deleted");
+      await axiosInstance.delete(`/messages/${messageId}?type=${type}`);
+      if (type === "me") {
+        set((state) => ({
+          messages: state.messages.filter((message) => message._id !== messageId),
+        }));
+      } else {
+        set((state) => ({
+          messages: state.messages.map((message) =>
+            message._id === messageId ? { ...message, isDeletedForEveryone: true, text: "", image: "" } : message
+          ),
+        }));
+      }
+      toast.success(type === "me" ? "Message deleted for you" : "Message deleted for everyone");
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to delete message");
     }
@@ -119,9 +128,11 @@ export const useChatStore = create((set, get) => ({
       get().markMessagesAsRead(newMessage.senderId);
     });
 
-    socket.on("messageDeleted", (messageId) => {
+    socket.on("messageDeletedForEveryone", (messageId) => {
       set((state) => ({
-        messages: state.messages.filter((msg) => msg._id !== messageId),
+        messages: state.messages.map((msg) =>
+          msg._id === messageId ? { ...msg, isDeletedForEveryone: true, text: "", image: "" } : msg
+        ),
       }));
     });
 
@@ -160,7 +171,7 @@ export const useChatStore = create((set, get) => ({
   unsubscribeFromMessages: () => {
     const socket = useAuthStore.getState().socket;
     socket.off("newMessage");
-    socket.off("messageDeleted");
+    socket.off("messageDeletedForEveryone");
     socket.off("messageEdited");
     socket.off("messagesRead");
     socket.off("userTyping");
@@ -168,5 +179,6 @@ export const useChatStore = create((set, get) => ({
   },
 
   setSelectedUser: (selectedUser) => set({ selectedUser, searchQuery: "", page: 1, hasMore: true }),
+  setSelectedProfileUser: (selectedProfileUser) => set({ selectedProfileUser }),
   setSearchQuery: (searchQuery) => set({ searchQuery }),
 }));

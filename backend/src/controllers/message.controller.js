@@ -44,6 +44,7 @@ export const getMessages = async (req, res) => {
         { senderId: myId, receiverId: userToChatId },
         { senderId: userToChatId, receiverId: myId },
       ],
+      deletedFor: { $ne: myId },
     };
 
     const messages = await Message.find(query)
@@ -105,28 +106,40 @@ export const sendMessage = async (req, res) => {
 export const deleteMessage = async (req, res) => {
   try {
     const { id: messageId } = req.params;
-    const senderId = req.user._id;
+    const { type } = req.query; // "everyone" or "me"
+    const userId = req.user._id;
 
     const message = await Message.findById(messageId);
     if (!message) {
       return res.status(404).json({ error: "Message not found" });
     }
 
-    if (message.senderId.toString() !== senderId.toString()) {
-      return res.status(403).json({ error: "You can only delete your own messages" });
+    if (type === "everyone") {
+      if (message.senderId.toString() !== userId.toString()) {
+        return res.status(403).json({ error: "You can only delete for everyone if you sent the message" });
+      }
+
+      message.isDeletedForEveryone = true;
+      message.text = "";
+      message.image = "";
+      await message.save();
+
+      // Notify receiver
+      const receiverId = message.receiverId.toString();
+      const receiverSocketId = getReceiverSocketId(receiverId);
+      if (receiverSocketId) {
+        io.to(receiverSocketId).emit("messageDeletedForEveryone", messageId);
+      }
+
+      res.status(200).json({ message: "Message deleted for everyone", messageId, isDeletedForEveryone: true });
+    } else {
+      // Delete for me
+      if (!message.deletedFor.includes(userId)) {
+        message.deletedFor.push(userId);
+        await message.save();
+      }
+      res.status(200).json({ message: "Message deleted for you", messageId });
     }
-
-    const receiverId = message.receiverId.toString();
-
-    await Message.findByIdAndDelete(messageId);
-
-    // Notify receiver
-    const receiverSocketId = getReceiverSocketId(receiverId);
-    if (receiverSocketId) {
-      io.to(receiverSocketId).emit("messageDeleted", messageId);
-    }
-
-    res.status(200).json({ message: "Message deleted successfully", messageId });
   } catch (error) {
     console.log("Error in deleteMessage controller: ", error.message);
     res.status(500).json({ error: "Internal server error" });

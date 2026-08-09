@@ -1,6 +1,6 @@
 import { useChatStore } from "../store/useChatStore";
 import { useEffect, useRef, useState } from "react";
-import { Trash2, X, Edit2, Check, CheckCheck, Loader2 } from "lucide-react";
+import { Trash2, X, Edit2, Check, CheckCheck, Loader2, Ban } from "lucide-react";
 
 import ChatHeader from "./ChatHeader";
 import MessageInput from "./MessageInput";
@@ -110,7 +110,7 @@ const ChatContainer = () => {
 
         {/* Scrollable Content */}
         <div 
-          className="absolute inset-0 overflow-y-auto p-4 space-y-4 z-10"
+          className="absolute inset-0 overflow-y-auto overflow-x-hidden p-4 space-y-4 z-10"
           ref={scrollRef}
           onScroll={handleScroll}
         >
@@ -145,63 +145,85 @@ const ChatContainer = () => {
               </div>
             </div>
             <div className="chat-header mb-1 flex justify-end gap-2 h-5">
-              {message.senderId === authUser._id && (
-                <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
-                  {message.text && (
-                    <button
-                      onClick={() => {
-                        setEditingMessageId(message._id);
-                        setEditText(message.text);
-                      }}
-                      className="text-zinc-500 hover:text-emerald-500"
-                    >
-                      <Edit2 className="size-4" />
-                    </button>
-                  )}
+              <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                {message.senderId === authUser._id && message.text && !message.isDeletedForEveryone && (
                   <button
-                    onClick={() => deleteMessage(message._id)}
-                    className="text-error hover:text-red-600"
+                    onClick={() => {
+                      setEditingMessageId(message._id);
+                      setEditText(message.text);
+                    }}
+                    className="text-zinc-500 hover:text-emerald-500"
                   >
+                    <Edit2 className="size-4" />
+                  </button>
+                )}
+                
+                <div className={`dropdown ${message.senderId === authUser._id ? "dropdown-end" : ""}`}>
+                  <div tabIndex={0} role="button" className="text-error hover:text-red-600 flex items-center justify-center p-1">
                     <Trash2 className="size-4" />
-                  </button>
+                  </div>
+                  <ul tabIndex={0} className="dropdown-content z-50 menu p-2 shadow bg-base-300 rounded-box w-48 ml-1">
+                    <li>
+                      <button onClick={() => { deleteMessage(message._id, "me"); document.activeElement.blur(); }} className="text-sm">
+                        Delete for me
+                      </button>
+                    </li>
+                    {message.senderId === authUser._id && !message.isDeletedForEveryone && (
+                      <li>
+                        <button onClick={() => { deleteMessage(message._id, "everyone"); document.activeElement.blur(); }} className="text-error text-sm">
+                          Delete for everyone
+                        </button>
+                      </li>
+                    )}
+                  </ul>
                 </div>
-              )}
+              </div>
             </div>
-            <div className="chat-bubble flex flex-col">
-              {message.image && (
-                <img
-                  src={message.image}
-                  alt="Attachment"
-                  className="sm:max-w-[200px] rounded-md mb-2 cursor-pointer hover:opacity-80 transition-opacity"
-                  onClick={() => setSelectedImage(message.image)}
-                />
-              )}
-              {editingMessageId === message._id ? (
-                <form 
-                  onSubmit={(e) => handleEditSubmit(e, message._id)}
-                  className="flex items-center gap-2 mt-1"
-                >
-                  <input 
-                    type="text" 
-                    value={editText}
-                    onChange={(e) => setEditText(e.target.value)}
-                    className="input input-sm input-bordered w-full text-base-content bg-base-100"
-                    autoFocus
-                  />
-                  <button type="submit" className="btn btn-sm btn-circle btn-success btn-outline">
-                    <Check className="size-4" />
-                  </button>
-                  <button 
-                    type="button" 
-                    onClick={() => setEditingMessageId(null)}
-                    className="btn btn-sm btn-circle btn-error btn-outline"
-                  >
-                    <X className="size-4" />
-                  </button>
-                </form>
+            <div className="chat-bubble flex flex-col relative overflow-visible">
+              {message.isDeletedForEveryone ? (
+                <div className="italic text-zinc-400 flex items-center gap-2 py-1">
+                  <Ban className="size-4" /> 
+                  <span className="text-sm">This message was deleted</span>
+                </div>
               ) : (
-                message.text && <p className="mb-1">{message.text}</p>
+                <>
+                  {message.image && (
+                    <img
+                      src={message.image}
+                      alt="Attachment"
+                      className="sm:max-w-[200px] rounded-md mb-2 cursor-pointer hover:opacity-80 transition-opacity"
+                      onClick={() => setSelectedImage(message.image)}
+                    />
+                  )}
+                  {editingMessageId === message._id ? (
+                    <form 
+                      onSubmit={(e) => handleEditSubmit(e, message._id)}
+                      className="flex items-center gap-2 mt-1"
+                    >
+                      <input 
+                        type="text" 
+                        value={editText}
+                        onChange={(e) => setEditText(e.target.value)}
+                        className="input input-sm input-bordered w-full text-base-content bg-base-100"
+                        autoFocus
+                      />
+                      <button type="submit" className="btn btn-sm btn-circle btn-success btn-outline">
+                        <Check className="size-4" />
+                      </button>
+                      <button 
+                        type="button" 
+                        onClick={() => setEditingMessageId(null)}
+                        className="btn btn-sm btn-circle btn-error btn-outline"
+                      >
+                        <X className="size-4" />
+                      </button>
+                    </form>
+                  ) : (
+                    message.text && <p className="mb-1">{message.text}</p>
+                  )}
+                </>
               )}
+
 
               {/* Timestamp and Ticks */}
               <div className="flex items-center justify-end gap-1 text-[10px] opacity-70 mt-1 self-end ml-4">

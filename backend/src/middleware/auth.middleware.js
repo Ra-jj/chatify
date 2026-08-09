@@ -21,6 +21,11 @@ export const protectRoute = async (req, res, next) => {
       return res.status(404).json({ message: "User not found" });
     }
 
+    if (user.sessionId !== decoded.sessionId) {
+      res.cookie("jwt", "", { maxAge: 0 });
+      return res.status(401).json({ message: "Unauthorized - Logged in from another device" });
+    }
+
     req.user = user;
 
     next();
