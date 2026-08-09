@@ -101,6 +101,19 @@ export const useChatStore = create((set, get) => ({
     }
   },
 
+  reactToMessage: async (messageId, emoji) => {
+    try {
+      const res = await axiosInstance.post(`/messages/react/${messageId}`, { emoji });
+      set((state) => ({
+        messages: state.messages.map((message) =>
+          message._id === messageId ? res.data : message
+        ),
+      }));
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Failed to react to message");
+    }
+  },
+
   subscribeToMessages: () => {
     const { selectedUser } = get();
     if (!selectedUser) return;
@@ -144,6 +157,14 @@ export const useChatStore = create((set, get) => ({
       }));
     });
 
+    socket.on("messageReacted", (reactedMessage) => {
+      set((state) => ({
+        messages: state.messages.map((msg) =>
+          msg._id === reactedMessage._id ? reactedMessage : msg
+        ),
+      }));
+    });
+
     socket.on("messagesRead", ({ readerId }) => {
       const { selectedUser } = get();
       if (selectedUser?._id === readerId) {
@@ -173,6 +194,7 @@ export const useChatStore = create((set, get) => ({
     socket.off("newMessage");
     socket.off("messageDeletedForEveryone");
     socket.off("messageEdited");
+    socket.off("messageReacted");
     socket.off("messagesRead");
     socket.off("userTyping");
     socket.off("userStoppedTyping");

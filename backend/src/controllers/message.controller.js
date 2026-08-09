@@ -1,5 +1,6 @@
 import User from "../models/user.model.js";
 import Message from "../models/message.model.js";
+import ogs from "open-graph-scraper";
 
 import cloudinary from "../lib/cloudinary.js";
 import { getReceiverSocketId, io } from "../lib/socket.js";
@@ -68,7 +69,7 @@ export const getMessages = async (req, res) => {
 
 export const sendMessage = async (req, res) => {
   try {
-    const { text, image } = req.body;
+    const { text, image, audio } = req.body;
     const { id: receiverId } = req.params;
     const senderId = req.user._id;
 
@@ -79,6 +80,36 @@ export const sendMessage = async (req, res) => {
       imageUrl = uploadResponse.secure_url;
     }
 
+    let audioUrl;
+    if (audio) {
+      // Upload base64 audio to cloudinary
+      const uploadResponse = await cloudinary.uploader.upload(audio, {
+        resource_type: "video",
+      });
+      audioUrl = uploadResponse.secure_url;
+    }
+
+    let linkPreview = null;
+    if (text) {
+      const urlRegex = /(https?:\/\/[^\s]+)/g;
+      const urls = text.match(urlRegex);
+      if (urls && urls.length > 0) {
+        try {
+          const { result } = await ogs({ url: urls[0] });
+          if (result.success) {
+            linkPreview = {
+              title: result.ogTitle,
+              description: result.ogDescription,
+              image: result.ogImage?.[0]?.url,
+              url: result.ogUrl || urls[0],
+            };
+          }
+        } catch (error) {
+          console.log("Error fetching link preview:", error.message);
+        }
+      }
+    }
+
     const receiverSocketId = getReceiverSocketId(receiverId);
     const status = receiverSocketId ? "delivered" : "sent";
 
@@ -87,6 +118,8 @@ export const sendMessage = async (req, res) => {
       receiverId,
       text,
       image: imageUrl,
+      audio: audioUrl,
+      linkPreview,
       status,
     });
 
@@ -202,6 +235,51 @@ export const markMessagesAsRead = async (req, res) => {
     res.status(200).json({ message: "Messages marked as read" });
   } catch (error) {
     console.log("Error in markMessagesAsRead: ", error.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+export const reactToMessage = async (req, res) => {
+  try {
+    const { id: messageId } = req.params;
+    const { emoji } = req.body;
+    const userId = req.user._id;
+
+    const message = await Message.findById(messageId);
+    if (!message) {
+      return res.status(404).json({ error: "Message not found" });
+    }
+
+    // Check if user already reacted
+    const existingUserReactionIndex = message.reactions.findIndex(
+      (r) => r.userId.toString() === userId.toString()
+    );
+
+    if (existingUserReactionIndex !== -1) {
+      if (message.reactions[existingUserReactionIndex].emoji === emoji) {
+        // If clicking the same emoji, remove it (toggle off)
+        message.reactions.splice(existingUserReactionIndex, 1);
+      } else {
+        // If clicking a different emoji, replace the old one
+        message.reactions[existingUserReactionIndex].emoji = emoji;
+      }
+    } else {
+      // Add new reaction
+      message.reactions.push({ userId, emoji });
+    }
+
+    await message.save();
+
+    // Emit event to notify users
+    const receiverSocketId = getReceiverSocketId(message.receiverId);
+    const senderSocketId = getReceiverSocketId(message.senderId);
+
+    if (receiverSocketId) io.to(receiverSocketId).emit("messageReacted", message);
+    if (senderSocketId) io.to(senderSocketId).emit("messageReacted", message);
+
+    res.status(200).json(message);
+  } catch (error) {
+    console.log("Error in reactToMessage controller: ", error.message);
     res.status(500).json({ error: "Internal server error" });
   }
 };

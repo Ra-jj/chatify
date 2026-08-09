@@ -18,6 +18,21 @@ const messageSchema = new mongoose.Schema(
     image: {
       type: String,
     },
+    audio: {
+      type: String,
+    },
+    reactions: [
+      {
+        userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        emoji: String,
+      },
+    ],
+    linkPreview: {
+      title: String,
+      description: String,
+      image: String,
+      url: String,
+    },
     isEdited: {
       type: Boolean,
       default: false,

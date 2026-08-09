@@ -1,6 +1,6 @@
 import { useChatStore } from "../store/useChatStore";
 import { useEffect, useRef, useState } from "react";
-import { Trash2, X, Edit2, Check, CheckCheck, Loader2, Ban } from "lucide-react";
+import { Trash2, X, Edit2, Check, CheckCheck, Loader2, Ban, Smile } from "lucide-react";
 
 import ChatHeader from "./ChatHeader";
 import MessageInput from "./MessageInput";
@@ -18,6 +18,7 @@ const ChatContainer = () => {
     unsubscribeFromMessages,
     deleteMessage,
     editMessage,
+    reactToMessage,
     searchQuery,
     hasMore,
     page,
@@ -27,6 +28,7 @@ const ChatContainer = () => {
   const [selectedImage, setSelectedImage] = useState(null);
   const [editingMessageId, setEditingMessageId] = useState(null);
   const [editText, setEditText] = useState("");
+  const EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 
   const [previousScrollHeight, setPreviousScrollHeight] = useState(0);
   const scrollRef = useRef(null);
@@ -177,6 +179,26 @@ const ChatContainer = () => {
                     )}
                   </ul>
                 </div>
+
+                {!message.isDeletedForEveryone && (
+                  <div className={`dropdown ${message.senderId === authUser._id ? "dropdown-end" : ""}`}>
+                    <div tabIndex={0} role="button" className="text-zinc-500 hover:text-emerald-500 flex items-center justify-center p-1">
+                      <Smile className="size-4" />
+                    </div>
+                    <ul tabIndex={0} className="dropdown-content z-50 flex flex-row gap-1 p-2 shadow bg-base-300 rounded-box -top-10">
+                      {EMOJIS.map(emoji => (
+                        <li key={emoji}>
+                          <button 
+                            onClick={() => { reactToMessage(message._id, emoji); document.activeElement.blur(); }}
+                            className="hover:scale-125 transition-transform text-lg"
+                          >
+                            {emoji}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             </div>
             <div className="chat-bubble flex flex-col relative overflow-visible">
@@ -194,6 +216,18 @@ const ChatContainer = () => {
                       className="sm:max-w-[200px] rounded-md mb-2 cursor-pointer hover:opacity-80 transition-opacity"
                       onClick={() => setSelectedImage(message.image)}
                     />
+                  )}
+                  {message.audio && (
+                    <audio src={message.audio} controls className="h-10 mb-2 w-48 sm:w-64" />
+                  )}
+                  {message.linkPreview && (
+                    <a href={message.linkPreview.url} target="_blank" rel="noopener noreferrer" className="block max-w-sm border border-zinc-700 rounded-lg overflow-hidden mb-2 hover:opacity-90 bg-base-300 transition-colors">
+                      {message.linkPreview.image && <img src={message.linkPreview.image} alt="Preview" className="w-full h-32 object-cover bg-zinc-800" />}
+                      <div className="p-3">
+                        <h4 className="font-semibold text-sm truncate">{message.linkPreview.title}</h4>
+                        {message.linkPreview.description && <p className="text-xs text-zinc-400 line-clamp-2 mt-1">{message.linkPreview.description}</p>}
+                      </div>
+                    </a>
                   )}
                   {editingMessageId === message._id ? (
                     <form 
@@ -224,6 +258,25 @@ const ChatContainer = () => {
                 </>
               )}
 
+              {message.reactions && message.reactions.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1 -mb-3 z-10 relative">
+                  {Object.entries(
+                    message.reactions.reduce((acc, r) => {
+                      acc[r.emoji] = (acc[r.emoji] || 0) + 1;
+                      return acc;
+                    }, {})
+                  ).map(([emoji, count]) => (
+                    <button
+                      key={emoji}
+                      onClick={() => reactToMessage(message._id, emoji)}
+                      className="text-xs bg-base-300 border border-zinc-700 rounded-full px-2 py-0.5 flex items-center gap-1 hover:bg-base-200 transition-colors shadow-sm"
+                    >
+                      <span>{emoji}</span>
+                      {count > 1 && <span className="text-[10px] text-zinc-400">{count}</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
 
               {/* Timestamp and Ticks */}
               <div className="flex items-center justify-end gap-1 text-[10px] opacity-70 mt-1 self-end ml-4">

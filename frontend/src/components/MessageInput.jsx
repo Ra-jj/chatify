@@ -1,16 +1,22 @@
 import { useRef, useState } from "react";
 import { useChatStore } from "../store/useChatStore";
 import { useAuthStore } from "../store/useAuthStore";
-import { Image, Send, X, Smile } from "lucide-react";
+import { Image, Send, X, Smile, Mic, Square } from "lucide-react";
 import toast from "react-hot-toast";
 import EmojiPicker from 'emoji-picker-react';
 
 const MessageInput = () => {
   const [text, setText] = useState("");
   const [imagePreview, setImagePreview] = useState(null);
+  const [audioUrl, setAudioUrl] = useState(null);
+  const [isRecording, setIsRecording] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  
   const fileInputRef = useRef(null);
   const typingTimeoutRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  
   const { sendMessage, selectedUser } = useChatStore();
   const { socket } = useAuthStore();
 
@@ -32,6 +38,55 @@ const MessageInput = () => {
   const removeImage = () => {
     setImagePreview(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const removeAudio = () => {
+    setAudioUrl(null);
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorderRef.current = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+
+      mediaRecorderRef.current.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorderRef.current.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const reader = new FileReader();
+        reader.readAsDataURL(audioBlob);
+        reader.onloadend = () => {
+          setAudioUrl(reader.result);
+        };
+        stream.getTracks().forEach((track) => track.stop());
+      };
+
+      mediaRecorderRef.current.start();
+      setIsRecording(true);
+
+      // Auto stop after 2 mins (120000 ms)
+      setTimeout(() => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+          stopRecording();
+          toast.success("Voice note stopped automatically after 2 minutes.");
+        }
+      }, 120000);
+    } catch (error) {
+      console.error("Error accessing microphone:", error);
+      toast.error("Could not access microphone");
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
   };
 
   const handleTyping = (e) => {
@@ -56,7 +111,7 @@ const MessageInput = () => {
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
-    if (!text.trim() && !imagePreview) return;
+    if (!text.trim() && !imagePreview && !audioUrl) return;
 
     // Clear typing timeout when sending
     if (typingTimeoutRef.current) {
@@ -70,11 +125,13 @@ const MessageInput = () => {
       await sendMessage({
         text: text.trim(),
         image: imagePreview,
+        audio: audioUrl,
       });
 
       // Clear form
       setText("");
       setImagePreview(null);
+      setAudioUrl(null);
       setShowEmojiPicker(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
     } catch (error) {
@@ -94,6 +151,22 @@ const MessageInput = () => {
             />
             <button
               onClick={removeImage}
+              className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-base-300
+              flex items-center justify-center"
+              type="button"
+            >
+              <X className="size-3" />
+            </button>
+          </div>
+        </div>
+      )}
+      
+      {audioUrl && (
+        <div className="mb-3 flex items-center gap-2">
+          <div className="relative bg-base-200 p-2 rounded-lg pr-8">
+            <audio src={audioUrl} controls className="h-10" />
+            <button
+              onClick={removeAudio}
               className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-base-300
               flex items-center justify-center"
               type="button"
@@ -127,6 +200,7 @@ const MessageInput = () => {
             value={text}
             onChange={handleTyping}
             onFocus={() => setShowEmojiPicker(false)}
+            disabled={isRecording}
           />
           <input
             type="file"
@@ -144,11 +218,20 @@ const MessageInput = () => {
           >
             <Image size={20} />
           </button>
+          
+          <button
+            type="button"
+            className={`flex sm:flex btn btn-circle
+                     ${isRecording ? "text-red-500 animate-pulse bg-red-500/10" : "text-zinc-400"}`}
+            onClick={isRecording ? stopRecording : startRecording}
+          >
+            {isRecording ? <Square size={20} fill="currentColor" /> : <Mic size={20} />}
+          </button>
         </div>
         <button
           type="submit"
           className="btn btn-sm btn-circle"
-          disabled={!text.trim() && !imagePreview}
+          disabled={(!text.trim() && !imagePreview && !audioUrl) || isRecording}
         >
           <Send size={22} />
         </button>
