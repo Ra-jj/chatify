@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useAuthStore } from "../store/useAuthStore";
-import { Camera, Mail, User } from "lucide-react";
+import { Camera, Mail, User, X } from "lucide-react";
 
 const ProfilePage = () => {
   const { authUser, isUpdatingProfile, updateProfile } = useAuthStore();
   const [selectedImg, setSelectedImg] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const handleImageUpload = async (e) => {
     const file = e.target.files[0];
@@ -22,6 +23,7 @@ const ProfilePage = () => {
   };
 
   return (
+    <>
     <div className="min-h-screen pt-20">
       <div className="max-w-2xl mx-auto p-4 py-8">
         <div className="bg-base-300 rounded-xl p-6 space-y-8">
@@ -37,7 +39,8 @@ const ProfilePage = () => {
               <img
                 src={selectedImg || authUser.profilePic || "/avatar.png"}
                 alt="Profile"
-                className="size-32 rounded-full object-cover border-4 "
+                className="size-32 rounded-full object-cover border-4 cursor-pointer hover:opacity-80 transition-opacity"
+                onClick={() => setIsModalOpen(true)}
               />
               <label
                 htmlFor="avatar-upload"
@@ -99,6 +102,31 @@ const ProfilePage = () => {
         </div>
       </div>
     </div>
+    
+      {/* Full Size Image Modal */}
+      {isModalOpen && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" 
+          onClick={() => setIsModalOpen(false)}
+        >
+          <div className="relative max-w-4xl max-h-[90vh] flex flex-col items-center">
+            <button 
+              className="absolute -top-12 right-0 btn btn-circle btn-sm bg-base-300 hover:bg-base-200 border-none text-white" 
+              onClick={(e) => { e.stopPropagation(); setIsModalOpen(false); }}
+            >
+              <X className="size-5" />
+            </button>
+            <img 
+              src={selectedImg || authUser.profilePic || "/avatar.png"} 
+              alt="Profile Full Size" 
+              className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+        </div>
+      )}
+
+    </>
   );
 };
 export default ProfilePage;

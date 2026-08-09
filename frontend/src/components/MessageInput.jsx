@@ -114,7 +114,7 @@ const MessageInput = () => {
         <div className="flex-1 flex gap-2">
           <button
             type="button"
-            className="hidden sm:flex btn btn-circle text-zinc-400 hover:text-emerald-500"
+            className="flex sm:flex btn btn-circle text-zinc-400 hover:text-emerald-500"
             onClick={() => setShowEmojiPicker(!showEmojiPicker)}
           >
             <Smile size={20} />
@@ -138,7 +138,7 @@ const MessageInput = () => {
 
           <button
             type="button"
-            className={`hidden sm:flex btn btn-circle
+            className={`flex sm:flex btn btn-circle
                      ${imagePreview ? "text-emerald-500" : "text-zinc-400"}`}
             onClick={() => fileInputRef.current?.click()}
           >
