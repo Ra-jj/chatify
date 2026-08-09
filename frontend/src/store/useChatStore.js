@@ -6,6 +6,7 @@ import { useAuthStore } from "./useAuthStore";
 export const useChatStore = create((set, get) => ({
   messages: [],
   users: [],
+  allUsers: [],
   groups: [],
   selectedUser: null, // this will hold either a user or a pseudo-user group object
   selectedProfileUser: null,
@@ -22,11 +23,12 @@ export const useChatStore = create((set, get) => ({
   getUsers: async () => {
     set({ isUsersLoading: true });
     try {
-      const [usersRes, groupsRes] = await Promise.all([
+      const [usersRes, allUsersRes, groupsRes] = await Promise.all([
         axiosInstance.get("/messages/users"),
+        axiosInstance.get("/messages/all-users"),
         axiosInstance.get("/groups"),
       ]);
-      set({ users: usersRes.data, groups: groupsRes.data });
+      set({ users: usersRes.data, allUsers: allUsersRes.data, groups: groupsRes.data });
     } catch (error) {
       toast.error(error.response?.data?.message || "Something went wrong");
     } finally {
@@ -153,13 +155,19 @@ export const useChatStore = create((set, get) => ({
       
       if (!isCurrentChat) {
         if (!isGroupMessage) {
-          set((state) => ({
-            users: state.users.map((u) =>
-              u._id === newMessage.senderId
-                ? { ...u, unreadCount: (u.unreadCount || 0) + 1 }
-                : u
-            ),
-          }));
+          const { users, getUsers } = get();
+          const userExists = users.some(u => u._id === newMessage.senderId);
+          if (!userExists) {
+            getUsers(); // Refresh sidebar to show the new chat
+          } else {
+            set((state) => ({
+              users: state.users.map((u) =>
+                u._id === newMessage.senderId
+                  ? { ...u, unreadCount: (u.unreadCount || 0) + 1 }
+                  : u
+              ),
+            }));
+          }
         }
         return;
       }

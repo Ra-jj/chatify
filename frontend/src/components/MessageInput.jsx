@@ -201,57 +201,56 @@ const MessageInput = () => {
         </div>
       )}
 
-      <form onSubmit={handleSendMessage} className="flex items-center gap-2">
-        <div className="flex-1 flex gap-2">
-          <button
-            type="button"
-            className="flex sm:flex btn btn-circle text-zinc-400 hover:text-emerald-500"
-            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-          >
-            <Smile size={20} />
-          </button>
+      <form onSubmit={handleSendMessage} className="flex items-center gap-1 sm:gap-2">
+        <button
+          type="button"
+          className="btn btn-sm sm:btn-md btn-circle text-zinc-400 hover:text-emerald-500 shrink-0"
+          onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+        >
+          <Smile size={20} />
+        </button>
 
-          <input
-            type="text"
-            className="w-full input input-bordered rounded-lg input-sm sm:input-md"
-            placeholder="Type a message..."
-            value={text}
-            onChange={handleTyping}
-            onFocus={() => setShowEmojiPicker(false)}
-            disabled={isRecording}
-          />
-          <input
-            type="file"
-            accept="image/*"
-            className="hidden"
-            ref={fileInputRef}
-            onChange={handleImageChange}
-          />
+        <input
+          type="text"
+          className="flex-1 input input-bordered rounded-full input-sm sm:input-md min-w-0"
+          placeholder="Type a message..."
+          value={text}
+          onChange={handleTyping}
+          onFocus={() => setShowEmojiPicker(false)}
+          disabled={isRecording}
+        />
+        <input
+          type="file"
+          accept="image/*"
+          className="hidden"
+          ref={fileInputRef}
+          onChange={handleImageChange}
+        />
 
-          <button
-            type="button"
-            className={`flex sm:flex btn btn-circle
-                     ${imagePreview ? "text-emerald-500" : "text-zinc-400"}`}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <Image size={20} />
-          </button>
-          
-          <button
-            type="button"
-            className={`flex sm:flex btn btn-circle
-                     ${isRecording ? "text-red-500 animate-pulse bg-red-500/10" : "text-zinc-400"}`}
-            onClick={isRecording ? stopRecording : startRecording}
-          >
-            {isRecording ? <Square size={20} fill="currentColor" /> : <Mic size={20} />}
-          </button>
-        </div>
+        <button
+          type="button"
+          className={`btn btn-sm sm:btn-md btn-circle shrink-0
+                   ${imagePreview ? "text-emerald-500" : "text-zinc-400"}`}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <Image size={20} />
+        </button>
+        
+        <button
+          type="button"
+          className={`btn btn-sm sm:btn-md btn-circle shrink-0
+                   ${isRecording ? "text-red-500 animate-pulse bg-red-500/10" : "text-zinc-400"}`}
+          onClick={isRecording ? stopRecording : startRecording}
+        >
+          {isRecording ? <Square size={20} fill="currentColor" /> : <Mic size={20} />}
+        </button>
+
         <button
           type="submit"
-          className="btn btn-sm btn-circle"
+          className="btn btn-sm sm:btn-md btn-circle btn-primary shrink-0"
           disabled={(!text.trim() && !imagePreview && !audioUrl) || isRecording}
         >
-          <Send size={22} />
+          <Send size={18} />
         </button>
       </form>
     </div>

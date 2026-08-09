@@ -9,7 +9,26 @@ import { getReceiverSocketId, io } from "../lib/socket.js";
 export const getUsersForSidebar = async (req, res) => {
   try {
     const loggedInUserId = req.user._id;
-    const filteredUsers = await User.find({ _id: { $ne: loggedInUserId } }).select("-password");
+    
+    // Find all messages involving the logged-in user
+    const messages = await Message.find({
+      $or: [{ senderId: loggedInUserId }, { receiverId: loggedInUserId }],
+      groupId: null // Only 1-on-1 chats
+    });
+
+    const userIdsWithHistory = new Set();
+    messages.forEach((msg) => {
+      if (msg.senderId && msg.senderId.toString() !== loggedInUserId.toString()) {
+        userIdsWithHistory.add(msg.senderId.toString());
+      }
+      if (msg.receiverId && msg.receiverId.toString() !== loggedInUserId.toString()) {
+        userIdsWithHistory.add(msg.receiverId.toString());
+      }
+    });
+
+    const filteredUsers = await User.find({ 
+      _id: { $in: Array.from(userIdsWithHistory) } 
+    }).select("-password");
 
     const unreadMessages = await Message.aggregate([
       { $match: { receiverId: loggedInUserId, status: { $ne: "read" } } },
@@ -29,6 +48,17 @@ export const getUsersForSidebar = async (req, res) => {
     res.status(200).json(usersWithUnread);
   } catch (error) {
     console.error("Error in getUsersForSidebar: ", error.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+export const getAllUsers = async (req, res) => {
+  try {
+    const loggedInUserId = req.user._id;
+    const allUsers = await User.find({ _id: { $ne: loggedInUserId } }).select("-password");
+    res.status(200).json(allUsers);
+  } catch (error) {
+    console.error("Error in getAllUsers: ", error.message);
     res.status(500).json({ error: "Internal server error" });
   }
 };

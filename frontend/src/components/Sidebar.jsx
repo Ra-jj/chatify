@@ -2,8 +2,9 @@ import { useEffect, useState, useMemo } from "react";
 import { useChatStore } from "../store/useChatStore";
 import { useAuthStore } from "../store/useAuthStore";
 import SidebarSkeleton from "./skeletons/SidebarSkeleton";
-import { Users, MessagesSquare, Plus } from "lucide-react";
+import { Users, MessagesSquare, Plus, SquarePen } from "lucide-react";
 import CreateGroupModal from "./CreateGroupModal";
+import NewChatModal from "./NewChatModal";
 
 const Sidebar = () => {
   const { getUsers, users, groups, selectedUser, setSelectedUser, isUsersLoading, setSelectedProfileUser } = useChatStore();
@@ -11,6 +12,7 @@ const Sidebar = () => {
   const [showOnlineOnly, setShowOnlineOnly] = useState(false);
   const [activeTab, setActiveTab] = useState("all"); // 'all', 'chats', 'groups'
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isNewChatModalOpen, setIsNewChatModalOpen] = useState(false);
 
   useEffect(() => {
     getUsers();
@@ -49,13 +51,22 @@ const Sidebar = () => {
             <MessagesSquare className="size-6" />
             <span className="font-medium text-lg">Chats</span>
           </div>
-          <button 
-            onClick={() => setIsModalOpen(true)}
-            className="btn btn-sm btn-circle btn-ghost" 
-            title="Create Group"
-          >
-            <Plus className="size-5" />
-          </button>
+          <div className="flex gap-1">
+            <button 
+              onClick={() => setIsNewChatModalOpen(true)}
+              className="btn btn-sm btn-circle btn-ghost" 
+              title="New Chat"
+            >
+              <SquarePen className="size-5" />
+            </button>
+            <button 
+              onClick={() => setIsModalOpen(true)}
+              className="btn btn-sm btn-circle btn-ghost" 
+              title="Create Group"
+            >
+              <Plus className="size-5" />
+            </button>
+          </div>
         </div>
 
         {/* Tabs */}
@@ -153,6 +164,7 @@ const Sidebar = () => {
       </div>
 
       <CreateGroupModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+      <NewChatModal isOpen={isNewChatModalOpen} onClose={() => setIsNewChatModalOpen(false)} />
     </aside>
   );
 };
