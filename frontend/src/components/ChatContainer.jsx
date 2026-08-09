@@ -1,6 +1,6 @@
 import { useChatStore } from "../store/useChatStore";
 import { useEffect, useRef, useState } from "react";
-import { Trash2, X, Edit2, Check, CheckCheck, Loader2, Ban, Smile } from "lucide-react";
+import { Trash2, X, Edit2, Check, CheckCheck, Loader2, Ban, Smile, Reply } from "lucide-react";
 
 import ChatHeader from "./ChatHeader";
 import MessageInput from "./MessageInput";
@@ -8,9 +8,130 @@ import MessageSkeleton from "./skeletons/MessageSkeleton";
 import { useAuthStore } from "../store/useAuthStore";
 import { formatMessageTime } from "../lib/utils";
 
+const SwipeableBubble = ({ children, isMine, onReply }) => {
+  const [offsetX, setOffsetX] = useState(0);
+  const startXRef = useRef(0);
+  const isDraggingRef = useRef(false);
+
+  const handleTouchStart = (e) => {
+    isDraggingRef.current = true;
+    startXRef.current = e.touches[0].clientX;
+  };
+
+  const handleTouchMove = (e) => {
+    if (!isDraggingRef.current) return;
+    const currentX = e.touches[0].clientX;
+    let diff = currentX - startXRef.current;
+
+    // isMine: swipe left (negative diff)
+    // not mine: swipe right (positive diff)
+    if (isMine) {
+      if (diff > 0) diff = 0;
+      if (diff < -80) diff = -80;
+    } else {
+      if (diff < 0) diff = 0;
+      if (diff > 80) diff = 80;
+    }
+    
+    // add some friction
+    setOffsetX(diff * 0.5);
+  };
+
+  const handleTouchEnd = () => {
+    if (!isDraggingRef.current) return;
+    isDraggingRef.current = false;
+    if (Math.abs(offsetX) > 25) { // Threshold
+      onReply();
+    }
+    setOffsetX(0);
+  };
+
+  const handleMouseDown = (e) => {
+    isDraggingRef.current = true;
+    startXRef.current = e.clientX;
+  };
+
+  const handleMouseMove = (e) => {
+    if (!isDraggingRef.current) return;
+    const currentX = e.clientX;
+    let diff = currentX - startXRef.current;
+
+    if (isMine) {
+      if (diff > 0) diff = 0;
+      if (diff < -80) diff = -80;
+    } else {
+      if (diff < 0) diff = 0;
+      if (diff > 80) diff = 80;
+    }
+    setOffsetX(diff * 0.5);
+  };
+
+  const handleMouseUp = () => {
+    if (!isDraggingRef.current) return;
+    isDraggingRef.current = false;
+    if (Math.abs(offsetX) > 25) {
+      onReply();
+    }
+    setOffsetX(0);
+  };
+
+  const handleMouseLeave = () => {
+    if (isDraggingRef.current) {
+      handleMouseUp();
+    }
+  };
+
+  return (
+    <div 
+      className="relative flex items-center w-full"
+      style={{ justifyContent: isMine ? 'flex-end' : 'flex-start' }}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseLeave}
+    >
+      {/* Reply Icon for incoming messages (left side) */}
+      {!isMine && (
+        <div 
+          className="absolute left-[-35px] flex items-center justify-center transition-all duration-200"
+          style={{ opacity: offsetX > 10 ? 1 : 0, transform: `scale(${offsetX > 20 ? 1 : 0.5})` }}
+        >
+          <div className="bg-base-300 rounded-full p-1.5 shadow">
+            <Reply className="size-4 text-emerald-500" />
+          </div>
+        </div>
+      )}
+
+      {/* Bubble Container */}
+      <div 
+        style={{ transform: `translateX(${offsetX}px)` }}
+        className={`chat-bubble flex flex-col relative overflow-visible ${!isDraggingRef.current ? "transition-transform duration-300 ease-out" : "transition-none"}`}
+      >
+        {children}
+      </div>
+
+      {/* Reply Icon for outgoing messages (right side) */}
+      {isMine && (
+        <div 
+          className="absolute right-[-35px] flex items-center justify-center transition-all duration-200"
+          style={{ opacity: offsetX < -10 ? 1 : 0, transform: `scale(${offsetX < -20 ? 1 : 0.5})` }}
+        >
+          <div className="bg-base-300 rounded-full p-1.5 shadow">
+            <Reply className="size-4 text-emerald-500" />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const ChatContainer = () => {
   const {
     messages,
+    users,
     getMessages,
     isMessagesLoading,
     selectedUser,
@@ -22,6 +143,7 @@ const ChatContainer = () => {
     searchQuery,
     hasMore,
     page,
+    setReplyingTo,
   } = useChatStore();
   const { authUser } = useAuthStore();
   const messageEndRef = useRef(null);
@@ -93,6 +215,11 @@ const ChatContainer = () => {
     }
   };
 
+  const getSenderProfile = (id) => {
+    if (id === authUser._id) return authUser;
+    return users.find(u => u._id === id) || { fullName: "Unknown", profilePic: "/avatar.png" };
+  };
+
   return (
     <div className="flex-1 flex flex-col overflow-auto relative">
       <ChatHeader />
@@ -128,177 +255,216 @@ const ChatContainer = () => {
           </div>
         )}
 
-        {filteredMessages.map((message) => (
-          <div
-            key={message._id}
-            className={`chat ${message.senderId === authUser._id ? "chat-end" : "chat-start"} group relative z-10`}
-            ref={messageEndRef}
-          >
-            <div className=" chat-image avatar">
-              <div className="size-10 rounded-full border">
-                <img
-                  src={
-                    message.senderId === authUser._id
-                      ? authUser.profilePic || "/avatar.png"
-                      : selectedUser.profilePic || "/avatar.png"
-                  }
-                  alt="profile pic"
-                />
+        {filteredMessages.map((message) => {
+          const senderProfile = getSenderProfile(message.senderId);
+          const isMine = message.senderId === authUser._id;
+          
+          return (
+            <div
+              key={message._id}
+              className={`chat ${isMine ? "chat-end" : "chat-start"} group relative z-10`}
+              ref={messageEndRef}
+            >
+              <div className="chat-image avatar">
+                <div className="size-10 rounded-full border">
+                  <img
+                    src={senderProfile.profilePic || "/avatar.png"}
+                    alt="profile pic"
+                  />
+                </div>
               </div>
-            </div>
-            <div className="chat-header mb-1 flex justify-end gap-2 h-5">
-              <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
-                {message.senderId === authUser._id && message.text && !message.isDeletedForEveryone && (
-                  <button
-                    onClick={() => {
-                      setEditingMessageId(message._id);
-                      setEditText(message.text);
-                    }}
-                    className="text-zinc-500 hover:text-emerald-500"
-                  >
-                    <Edit2 className="size-4" />
+
+              {selectedUser.isGroup && !isMine && (
+                <div className="chat-header text-xs opacity-70 mb-1 ml-1 font-medium">
+                  {senderProfile.fullName}
+                </div>
+              )}
+
+              <div className="chat-header mb-1 flex justify-end gap-2 h-5">
+                <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                  
+                  <button onClick={() => setReplyingTo(message)} className="text-zinc-500 hover:text-emerald-500 p-1 hidden sm:block">
+                    <Reply className="size-4" />
                   </button>
-                )}
-                
-                <div className={`dropdown ${message.senderId === authUser._id ? "dropdown-end" : ""}`}>
-                  <div tabIndex={0} role="button" className="text-error hover:text-red-600 flex items-center justify-center p-1">
-                    <Trash2 className="size-4" />
-                  </div>
-                  <ul tabIndex={0} className="dropdown-content z-50 menu p-2 shadow bg-base-300 rounded-box w-48 ml-1">
-                    <li>
-                      <button onClick={() => { deleteMessage(message._id, "me"); document.activeElement.blur(); }} className="text-sm">
-                        Delete for me
-                      </button>
-                    </li>
-                    {message.senderId === authUser._id && !message.isDeletedForEveryone && (
+
+                  {isMine && message.text && !message.isDeletedForEveryone && (
+                    <button
+                      onClick={() => {
+                        setEditingMessageId(message._id);
+                        setEditText(message.text);
+                      }}
+                      className="text-zinc-500 hover:text-emerald-500 p-1"
+                    >
+                      <Edit2 className="size-4" />
+                    </button>
+                  )}
+                  
+                  <div className={`dropdown ${isMine ? "dropdown-end" : ""}`}>
+                    <div tabIndex={0} role="button" className="text-error hover:text-red-600 flex items-center justify-center p-1">
+                      <Trash2 className="size-4" />
+                    </div>
+                    <ul tabIndex={0} className="dropdown-content z-50 menu p-2 shadow bg-base-300 rounded-box w-48 ml-1">
                       <li>
-                        <button onClick={() => { deleteMessage(message._id, "everyone"); document.activeElement.blur(); }} className="text-error text-sm">
-                          Delete for everyone
+                        <button onClick={() => { deleteMessage(message._id, "me"); document.activeElement.blur(); }} className="text-sm">
+                          Delete for me
                         </button>
                       </li>
-                    )}
-                  </ul>
-                </div>
-
-                {!message.isDeletedForEveryone && (
-                  <div className={`dropdown ${message.senderId === authUser._id ? "dropdown-end" : ""}`}>
-                    <div tabIndex={0} role="button" className="text-zinc-500 hover:text-emerald-500 flex items-center justify-center p-1">
-                      <Smile className="size-4" />
-                    </div>
-                    <ul tabIndex={0} className="dropdown-content z-50 flex flex-row gap-1 p-2 shadow bg-base-300 rounded-box -top-10">
-                      {EMOJIS.map(emoji => (
-                        <li key={emoji}>
-                          <button 
-                            onClick={() => { reactToMessage(message._id, emoji); document.activeElement.blur(); }}
-                            className="hover:scale-125 transition-transform text-lg"
-                          >
-                            {emoji}
+                      {isMine && !message.isDeletedForEveryone && (
+                        <li>
+                          <button onClick={() => { deleteMessage(message._id, "everyone"); document.activeElement.blur(); }} className="text-error text-sm">
+                            Delete for everyone
                           </button>
                         </li>
-                      ))}
+                      )}
                     </ul>
                   </div>
-                )}
-              </div>
-            </div>
-            <div className="chat-bubble flex flex-col relative overflow-visible">
-              {message.isDeletedForEveryone ? (
-                <div className="italic text-zinc-400 flex items-center gap-2 py-1">
-                  <Ban className="size-4" /> 
-                  <span className="text-sm">This message was deleted</span>
-                </div>
-              ) : (
-                <>
-                  {message.image && (
-                    <img
-                      src={message.image}
-                      alt="Attachment"
-                      className="sm:max-w-[200px] rounded-md mb-2 cursor-pointer hover:opacity-80 transition-opacity"
-                      onClick={() => setSelectedImage(message.image)}
-                    />
-                  )}
-                  {message.audio && (
-                    <audio src={message.audio} controls className="h-10 mb-2 w-48 sm:w-64" />
-                  )}
-                  {message.linkPreview && (
-                    <a href={message.linkPreview.url} target="_blank" rel="noopener noreferrer" className="block max-w-sm border border-zinc-700 rounded-lg overflow-hidden mb-2 hover:opacity-90 bg-base-300 transition-colors">
-                      {message.linkPreview.image && <img src={message.linkPreview.image} alt="Preview" className="w-full h-32 object-cover bg-zinc-800" />}
-                      <div className="p-3">
-                        <h4 className="font-semibold text-sm truncate">{message.linkPreview.title}</h4>
-                        {message.linkPreview.description && <p className="text-xs text-zinc-400 line-clamp-2 mt-1">{message.linkPreview.description}</p>}
+
+                  {!message.isDeletedForEveryone && (
+                    <div className={`dropdown ${isMine ? "dropdown-end" : ""}`}>
+                      <div tabIndex={0} role="button" className="text-zinc-500 hover:text-emerald-500 flex items-center justify-center p-1">
+                        <Smile className="size-4" />
                       </div>
-                    </a>
+                      <ul tabIndex={0} className="dropdown-content z-50 flex flex-row gap-1 p-2 shadow bg-base-300 rounded-box -top-10">
+                        {EMOJIS.map(emoji => (
+                          <li key={emoji}>
+                            <button 
+                              onClick={() => { reactToMessage(message._id, emoji); document.activeElement.blur(); }}
+                              className="hover:scale-125 transition-transform text-lg"
+                            >
+                              {emoji}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   )}
-                  {editingMessageId === message._id ? (
-                    <form 
-                      onSubmit={(e) => handleEditSubmit(e, message._id)}
-                      className="flex items-center gap-2 mt-1"
-                    >
-                      <input 
-                        type="text" 
-                        value={editText}
-                        onChange={(e) => setEditText(e.target.value)}
-                        className="input input-sm input-bordered w-full text-base-content bg-base-100"
-                        autoFocus
-                      />
-                      <button type="submit" className="btn btn-sm btn-circle btn-success btn-outline">
-                        <Check className="size-4" />
-                      </button>
-                      <button 
-                        type="button" 
-                        onClick={() => setEditingMessageId(null)}
-                        className="btn btn-sm btn-circle btn-error btn-outline"
-                      >
-                        <X className="size-4" />
-                      </button>
-                    </form>
-                  ) : (
-                    message.text && <p className="mb-1">{message.text}</p>
-                  )}
-                </>
-              )}
-
-              {message.reactions && message.reactions.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-1 -mb-3 z-10 relative">
-                  {Object.entries(
-                    message.reactions.reduce((acc, r) => {
-                      acc[r.emoji] = (acc[r.emoji] || 0) + 1;
-                      return acc;
-                    }, {})
-                  ).map(([emoji, count]) => (
-                    <button
-                      key={emoji}
-                      onClick={() => reactToMessage(message._id, emoji)}
-                      className="text-xs bg-base-300 border border-zinc-700 rounded-full px-2 py-0.5 flex items-center gap-1 hover:bg-base-200 transition-colors shadow-sm"
-                    >
-                      <span>{emoji}</span>
-                      {count > 1 && <span className="text-[10px] text-zinc-400">{count}</span>}
-                    </button>
-                  ))}
                 </div>
-              )}
-
-              {/* Timestamp and Ticks */}
-              <div className="flex items-center justify-end gap-1 text-[10px] opacity-70 mt-1 self-end ml-4">
-                <time>
-                  {formatMessageTime(message.createdAt)}
-                  {message.isEdited && <span className="italic ml-1">(edited)</span>}
-                </time>
-                {message.senderId === authUser._id && (
-                  <div className="flex items-center ml-1">
-                    {message.status === "read" ? (
-                      <CheckCheck className="size-4 text-blue-400" />
-                    ) : message.status === "delivered" ? (
-                      <CheckCheck className="size-4 text-base-content/70" />
-                    ) : (
-                      <Check className="size-4 text-base-content/70" />
-                    )}
+              </div>
+              
+              <SwipeableBubble isMine={isMine} onReply={() => setReplyingTo(message)}>
+                {/* Threaded Reply Block */}
+                {message.replyTo && (
+                  <div 
+                    className="mb-2 p-2 bg-base-300/50 rounded border-l-4 border-primary text-xs opacity-90 hover:opacity-100 transition-opacity"
+                    style={{ pointerEvents: 'none' }} // Prevent dragging conflicts when clicking inside
+                  >
+                    <div className="font-semibold text-primary mb-1">
+                      {message.replyTo.senderId === authUser._id ? 'You' : getSenderProfile(message.replyTo.senderId).fullName}
+                    </div>
+                    <div className="truncate max-w-[150px] sm:max-w-[250px]">
+                      {message.replyTo.text || (message.replyTo.image ? "📷 Photo" : message.replyTo.audio ? "🎤 Voice Note" : "Message")}
+                    </div>
                   </div>
                 )}
-              </div>
+
+                {message.isDeletedForEveryone ? (
+                  <div className="italic text-zinc-400 flex items-center gap-2 py-1">
+                    <Ban className="size-4" /> 
+                    <span className="text-sm">This message was deleted</span>
+                  </div>
+                ) : (
+                  <>
+                    {message.image && (
+                      <img
+                        src={message.image}
+                        alt="Attachment"
+                        className="sm:max-w-[200px] rounded-md mb-2 hover:opacity-80 transition-opacity"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedImage(message.image);
+                        }}
+                      />
+                    )}
+                    {message.audio && (
+                      <audio src={message.audio} controls className="h-10 mb-2 w-48 sm:w-64" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()} />
+                    )}
+                    {message.linkPreview && (
+                      <a href={message.linkPreview.url} target="_blank" rel="noopener noreferrer" className="block max-w-[200px] sm:max-w-xs border border-zinc-700 rounded-lg overflow-hidden mb-2 hover:opacity-90 bg-base-300 transition-colors" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+                        {message.linkPreview.image && <img src={message.linkPreview.image} alt="Preview" className="w-full h-32 object-cover bg-zinc-800" />}
+                        <div className="p-3">
+                          <h4 className="font-semibold text-sm truncate">{message.linkPreview.title}</h4>
+                          {message.linkPreview.description && <p className="text-xs text-zinc-400 line-clamp-2 mt-1">{message.linkPreview.description}</p>}
+                        </div>
+                      </a>
+                    )}
+                    {editingMessageId === message._id ? (
+                      <form 
+                        onSubmit={(e) => handleEditSubmit(e, message._id)}
+                        className="flex items-center gap-2 mt-1"
+                        onMouseDown={(e) => e.stopPropagation()} 
+                        onTouchStart={(e) => e.stopPropagation()}
+                      >
+                        <input 
+                          type="text" 
+                          value={editText}
+                          onChange={(e) => setEditText(e.target.value)}
+                          className="input input-sm input-bordered w-full text-base-content bg-base-100"
+                          autoFocus
+                        />
+                        <button type="submit" className="btn btn-sm btn-circle btn-success btn-outline">
+                          <Check className="size-4" />
+                        </button>
+                        <button 
+                          type="button" 
+                          onClick={() => setEditingMessageId(null)}
+                          className="btn btn-sm btn-circle btn-error btn-outline"
+                        >
+                          <X className="size-4" />
+                        </button>
+                      </form>
+                    ) : (
+                      message.text && <p className="mb-1 pointer-events-none">{message.text}</p>
+                    )}
+                  </>
+                )}
+
+                {message.reactions && message.reactions.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1 -mb-3 z-10 relative">
+                    {Object.entries(
+                      message.reactions.reduce((acc, r) => {
+                        acc[r.emoji] = (acc[r.emoji] || 0) + 1;
+                        return acc;
+                      }, {})
+                    ).map(([emoji, count]) => (
+                      <button
+                        key={emoji}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          reactToMessage(message._id, emoji);
+                        }}
+                        onMouseDown={(e) => e.stopPropagation()} 
+                        onTouchStart={(e) => e.stopPropagation()}
+                        className="text-xs bg-base-300 border border-zinc-700 rounded-full px-2 py-0.5 flex items-center gap-1 hover:bg-base-200 transition-colors shadow-sm"
+                      >
+                        <span>{emoji}</span>
+                        {count > 1 && <span className="text-[10px] text-zinc-400">{count}</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Timestamp and Ticks */}
+                <div className="flex items-center justify-end gap-1 text-[10px] opacity-70 mt-1 self-end ml-4 pointer-events-none">
+                  <time>
+                    {formatMessageTime(message.createdAt)}
+                    {message.isEdited && <span className="italic ml-1">(edited)</span>}
+                  </time>
+                  {isMine && (
+                    <div className="flex items-center ml-1">
+                      {message.status === "read" ? (
+                        <CheckCheck className="size-4 text-blue-400" />
+                      ) : message.status === "delivered" ? (
+                        <CheckCheck className="size-4 text-base-content/70" />
+                      ) : (
+                        <Check className="size-4 text-base-content/70" />
+                      )}
+                    </div>
+                  )}
+                </div>
+              </SwipeableBubble>
             </div>
-          </div>
-        ))}
+          );
+        })}
         </div>
       </div>
 

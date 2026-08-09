@@ -1,5 +1,6 @@
 import User from "../models/user.model.js";
 import Message from "../models/message.model.js";
+import Group from "../models/group.model.js";
 import ogs from "open-graph-scraper";
 
 import cloudinary from "../lib/cloudinary.js";
@@ -40,15 +41,21 @@ export const getMessages = async (req, res) => {
     const limit = parseInt(req.query.limit) || 50;
     const skip = (page - 1) * limit;
 
-    const query = {
-      $or: [
+    let query = { deletedFor: { $ne: myId } };
+    
+    // Check if it's a group
+    const group = await Group.findById(userToChatId).catch(() => null);
+    if (group) {
+      query.groupId = group._id;
+    } else {
+      query.$or = [
         { senderId: myId, receiverId: userToChatId },
         { senderId: userToChatId, receiverId: myId },
-      ],
-      deletedFor: { $ne: myId },
-    };
+      ];
+    }
 
     const messages = await Message.find(query)
+      .populate("replyTo", "text image audio senderId")
       .sort({ createdAt: -1 }) // Get newest first
       .skip(skip)
       .limit(limit);
@@ -69,20 +76,18 @@ export const getMessages = async (req, res) => {
 
 export const sendMessage = async (req, res) => {
   try {
-    const { text, image, audio } = req.body;
-    const { id: receiverId } = req.params;
+    const { text, image, audio, replyTo } = req.body;
+    const { id: targetId } = req.params;
     const senderId = req.user._id;
 
     let imageUrl;
     if (image) {
-      // Upload base64 image to cloudinary
       const uploadResponse = await cloudinary.uploader.upload(image);
       imageUrl = uploadResponse.secure_url;
     }
 
     let audioUrl;
     if (audio) {
-      // Upload base64 audio to cloudinary
       const uploadResponse = await cloudinary.uploader.upload(audio, {
         resource_type: "video",
       });
@@ -110,26 +115,54 @@ export const sendMessage = async (req, res) => {
       }
     }
 
-    const receiverSocketId = getReceiverSocketId(receiverId);
-    const status = receiverSocketId ? "delivered" : "sent";
+    let receiverId = null;
+    let groupId = null;
+    const group = await Group.findById(targetId).catch(() => null);
+
+    if (group) {
+      groupId = group._id;
+    } else {
+      receiverId = targetId;
+    }
 
     const newMessage = new Message({
       senderId,
       receiverId,
+      groupId,
+      replyTo,
       text,
       image: imageUrl,
       audio: audioUrl,
       linkPreview,
-      status,
+      status: "sent",
     });
 
     await newMessage.save();
 
-    if (receiverSocketId) {
-      io.to(receiverSocketId).emit("newMessage", newMessage);
+    const populatedMessage = await Message.findById(newMessage._id).populate("replyTo", "text image audio senderId");
+
+    if (groupId) {
+      // Group message: emit to all members except sender
+      group.members.forEach((memberId) => {
+        if (memberId.toString() !== senderId.toString()) {
+          const socketId = getReceiverSocketId(memberId);
+          if (socketId) {
+            io.to(socketId).emit("newMessage", populatedMessage);
+          }
+        }
+      });
+    } else {
+      // 1-on-1 message
+      const receiverSocketId = getReceiverSocketId(receiverId);
+      if (receiverSocketId) {
+        newMessage.status = "delivered";
+        await newMessage.save();
+        populatedMessage.status = "delivered";
+        io.to(receiverSocketId).emit("newMessage", populatedMessage);
+      }
     }
 
-    res.status(201).json(newMessage);
+    res.status(201).json(populatedMessage);
   } catch (error) {
     console.log("Error in sendMessage controller: ", error.message);
     res.status(500).json({ error: "Internal server error" });
@@ -155,13 +188,25 @@ export const deleteMessage = async (req, res) => {
       message.isDeletedForEveryone = true;
       message.text = "";
       message.image = "";
+      message.audio = "";
       await message.save();
 
-      // Notify receiver
-      const receiverId = message.receiverId.toString();
-      const receiverSocketId = getReceiverSocketId(receiverId);
-      if (receiverSocketId) {
-        io.to(receiverSocketId).emit("messageDeletedForEveryone", messageId);
+      // Notify receivers
+      if (message.groupId) {
+        const group = await Group.findById(message.groupId);
+        if (group) {
+          group.members.forEach((memberId) => {
+            if (memberId.toString() !== userId.toString()) {
+              const socketId = getReceiverSocketId(memberId);
+              if (socketId) io.to(socketId).emit("messageDeletedForEveryone", messageId);
+            }
+          });
+        }
+      } else {
+        const receiverSocketId = getReceiverSocketId(message.receiverId);
+        if (receiverSocketId) {
+          io.to(receiverSocketId).emit("messageDeletedForEveryone", messageId);
+        }
       }
 
       res.status(200).json({ message: "Message deleted for everyone", messageId, isDeletedForEveryone: true });
@@ -189,7 +234,7 @@ export const editMessage = async (req, res) => {
       return res.status(400).json({ error: "Message text is required" });
     }
 
-    const message = await Message.findById(messageId);
+    const message = await Message.findById(messageId).populate("replyTo", "text image audio senderId");
     if (!message) {
       return res.status(404).json({ error: "Message not found" });
     }
@@ -202,12 +247,22 @@ export const editMessage = async (req, res) => {
     message.isEdited = true;
     await message.save();
 
-    const receiverId = message.receiverId.toString();
-
-    // Notify receiver
-    const receiverSocketId = getReceiverSocketId(receiverId);
-    if (receiverSocketId) {
-      io.to(receiverSocketId).emit("messageEdited", message);
+    // Notify receivers
+    if (message.groupId) {
+      const group = await Group.findById(message.groupId);
+      if (group) {
+        group.members.forEach((memberId) => {
+          if (memberId.toString() !== senderId.toString()) {
+            const socketId = getReceiverSocketId(memberId);
+            if (socketId) io.to(socketId).emit("messageEdited", message);
+          }
+        });
+      }
+    } else {
+      const receiverSocketId = getReceiverSocketId(message.receiverId);
+      if (receiverSocketId) {
+        io.to(receiverSocketId).emit("messageEdited", message);
+      }
     }
 
     res.status(200).json(message);
@@ -221,6 +276,12 @@ export const markMessagesAsRead = async (req, res) => {
   try {
     const { id: senderId } = req.params;
     const myId = req.user._id;
+    
+    // Check if it's a group, groups don't have read receipts built in yet, skip for now.
+    const group = await Group.findById(senderId).catch(() => null);
+    if (group) {
+      return res.status(200).json({ message: "Skipped for group" });
+    }
 
     await Message.updateMany(
       { senderId, receiverId: myId, status: { $ne: "read" } },
@@ -245,37 +306,45 @@ export const reactToMessage = async (req, res) => {
     const { emoji } = req.body;
     const userId = req.user._id;
 
-    const message = await Message.findById(messageId);
+    const message = await Message.findById(messageId).populate("replyTo", "text image audio senderId");
     if (!message) {
       return res.status(404).json({ error: "Message not found" });
     }
 
-    // Check if user already reacted
     const existingUserReactionIndex = message.reactions.findIndex(
       (r) => r.userId.toString() === userId.toString()
     );
 
     if (existingUserReactionIndex !== -1) {
       if (message.reactions[existingUserReactionIndex].emoji === emoji) {
-        // If clicking the same emoji, remove it (toggle off)
         message.reactions.splice(existingUserReactionIndex, 1);
       } else {
-        // If clicking a different emoji, replace the old one
         message.reactions[existingUserReactionIndex].emoji = emoji;
       }
     } else {
-      // Add new reaction
       message.reactions.push({ userId, emoji });
     }
 
     await message.save();
 
     // Emit event to notify users
-    const receiverSocketId = getReceiverSocketId(message.receiverId);
-    const senderSocketId = getReceiverSocketId(message.senderId);
+    if (message.groupId) {
+      const group = await Group.findById(message.groupId);
+      if (group) {
+        group.members.forEach((memberId) => {
+          if (memberId.toString() !== userId.toString()) {
+            const socketId = getReceiverSocketId(memberId);
+            if (socketId) io.to(socketId).emit("messageReacted", message);
+          }
+        });
+      }
+    } else {
+      const receiverSocketId = getReceiverSocketId(message.receiverId);
+      const senderSocketId = getReceiverSocketId(message.senderId);
 
-    if (receiverSocketId) io.to(receiverSocketId).emit("messageReacted", message);
-    if (senderSocketId) io.to(senderSocketId).emit("messageReacted", message);
+      if (receiverSocketId && message.receiverId?.toString() !== userId.toString()) io.to(receiverSocketId).emit("messageReacted", message);
+      if (senderSocketId && message.senderId?.toString() !== userId.toString()) io.to(senderSocketId).emit("messageReacted", message);
+    }
 
     res.status(200).json(message);
   } catch (error) {

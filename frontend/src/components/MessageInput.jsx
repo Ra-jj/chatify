@@ -17,7 +17,7 @@ const MessageInput = () => {
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   
-  const { sendMessage, selectedUser } = useChatStore();
+  const { sendMessage, selectedUser, replyingTo, setReplyingTo } = useChatStore();
   const { socket } = useAuthStore();
 
   const handleImageChange = (e) => {
@@ -141,6 +141,24 @@ const MessageInput = () => {
 
   return (
     <div className="p-4 w-full relative">
+      {replyingTo && (
+        <div className="mb-3 p-3 bg-base-300 rounded-lg flex items-center justify-between border-l-4 border-primary">
+          <div className="flex flex-col flex-1 min-w-0">
+            <span className="text-xs font-semibold text-primary">Replying to message</span>
+            <div className="text-sm truncate text-base-content/80 mt-1">
+              {replyingTo.text || (replyingTo.image ? "Photo" : replyingTo.audio ? "Voice Note" : "Message")}
+            </div>
+          </div>
+          <button 
+            type="button"
+            onClick={() => setReplyingTo(null)}
+            className="btn btn-sm btn-circle btn-ghost"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+      )}
+
       {imagePreview && (
         <div className="mb-3 flex items-center gap-2">
           <div className="relative">
