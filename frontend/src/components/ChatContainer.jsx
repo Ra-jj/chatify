@@ -1,27 +1,51 @@
 import { useChatStore } from "../store/useChatStore";
 import { useEffect, useRef, useState } from "react";
-import { Trash2, X, Edit2, Check, CheckCheck, Loader2, Ban, Smile, Reply } from "lucide-react";
+import { Trash2, X, Edit2, Check, CheckCheck, Loader2, Ban, Smile, Reply, Forward } from "lucide-react";
 
 import ChatHeader from "./ChatHeader";
 import MessageInput from "./MessageInput";
 import MessageSkeleton from "./skeletons/MessageSkeleton";
 import { useAuthStore } from "../store/useAuthStore";
 import { formatMessageTime } from "../lib/utils";
+import ForwardMessageModal from "./ForwardMessageModal";
 
-const SwipeableBubble = ({ children, isMine, onReply }) => {
+const DoubleForwardIcon = ({ className }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <polyline points="11 17 16 12 11 7" />
+    <polyline points="16 17 21 12 16 7" />
+    <path d="M4 18v-2a4 4 0 0 1 4-4h8" />
+  </svg>
+);
+
+const SwipeableBubble = ({ children, isMine, onReply, onLongPress }) => {
   const [offsetX, setOffsetX] = useState(0);
   const startXRef = useRef(0);
   const isDraggingRef = useRef(false);
+  const longPressTimerRef = useRef(null);
+
+  const clearLongPress = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
 
   const handleTouchStart = (e) => {
     isDraggingRef.current = true;
     startXRef.current = e.touches[0].clientX;
+    longPressTimerRef.current = setTimeout(() => {
+      if (onLongPress) onLongPress();
+    }, 500); // 500ms hold triggers long press
   };
 
   const handleTouchMove = (e) => {
     if (!isDraggingRef.current) return;
     const currentX = e.touches[0].clientX;
     let diff = currentX - startXRef.current;
+
+    if (Math.abs(diff) > 10) {
+      clearLongPress();
+    }
 
     // isMine: swipe left (negative diff)
     // not mine: swipe right (positive diff)
@@ -38,6 +62,7 @@ const SwipeableBubble = ({ children, isMine, onReply }) => {
   };
 
   const handleTouchEnd = () => {
+    clearLongPress();
     if (!isDraggingRef.current) return;
     isDraggingRef.current = false;
     if (Math.abs(offsetX) > 25) { // Threshold
@@ -49,12 +74,19 @@ const SwipeableBubble = ({ children, isMine, onReply }) => {
   const handleMouseDown = (e) => {
     isDraggingRef.current = true;
     startXRef.current = e.clientX;
+    longPressTimerRef.current = setTimeout(() => {
+      if (onLongPress) onLongPress();
+    }, 500);
   };
 
   const handleMouseMove = (e) => {
     if (!isDraggingRef.current) return;
     const currentX = e.clientX;
     let diff = currentX - startXRef.current;
+
+    if (Math.abs(diff) > 10) {
+      clearLongPress();
+    }
 
     if (isMine) {
       if (diff > 0) diff = 0;
@@ -67,6 +99,7 @@ const SwipeableBubble = ({ children, isMine, onReply }) => {
   };
 
   const handleMouseUp = () => {
+    clearLongPress();
     if (!isDraggingRef.current) return;
     isDraggingRef.current = false;
     if (Math.abs(offsetX) > 25) {
@@ -76,6 +109,7 @@ const SwipeableBubble = ({ children, isMine, onReply }) => {
   };
 
   const handleMouseLeave = () => {
+    clearLongPress();
     if (isDraggingRef.current) {
       handleMouseUp();
     }
@@ -144,6 +178,7 @@ const ChatContainer = () => {
     hasMore,
     page,
     setReplyingTo,
+    setMessageToForward,
   } = useChatStore();
   const { authUser } = useAuthStore();
   const messageEndRef = useRef(null);
@@ -287,6 +322,10 @@ const ChatContainer = () => {
                     <Reply className="size-4" />
                   </button>
 
+                  <button onClick={() => setMessageToForward(message)} className="text-zinc-500 hover:text-emerald-500 p-1 hidden sm:flex items-center">
+                    <DoubleForwardIcon className="size-4" />
+                  </button>
+
                   {isMine && message.text && !message.isDeletedForEveryone && (
                     <button
                       onClick={() => {
@@ -341,7 +380,7 @@ const ChatContainer = () => {
                 </div>
               </div>
               
-              <SwipeableBubble isMine={isMine} onReply={() => setReplyingTo(message)}>
+              <SwipeableBubble isMine={isMine} onReply={() => setReplyingTo(message)} onLongPress={() => setMessageToForward(message)}>
                 {/* Threaded Reply Block */}
                 {message.replyTo && (
                   <div 
@@ -364,6 +403,12 @@ const ChatContainer = () => {
                   </div>
                 ) : (
                   <>
+                    {message.isForwarded && (
+                      <div className="text-[10px] text-zinc-400/80 italic mb-1 flex items-center font-medium pointer-events-none gap-1">
+                        <DoubleForwardIcon className="size-3" />
+                        Forwarded
+                      </div>
+                    )}
                     {message.image && (
                       <img
                         src={message.image}
@@ -419,7 +464,7 @@ const ChatContainer = () => {
                 )}
 
                 {message.reactions && message.reactions.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-1 -mb-3 z-10 relative">
+                  <div className="flex flex-wrap gap-1 mt-1 z-10 relative">
                     {Object.entries(
                       message.reactions.reduce((acc, r) => {
                         acc[r.emoji] = (acc[r.emoji] || 0) + 1;
@@ -492,6 +537,7 @@ const ChatContainer = () => {
           </div>
         </div>
       )}
+      <ForwardMessageModal />
     </div>
   );
 };

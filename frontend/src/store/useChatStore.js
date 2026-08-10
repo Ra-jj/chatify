@@ -12,6 +12,7 @@ export const useChatStore = create((set, get) => ({
   selectedProfileUser: null,
   typingUsers: [],
   replyingTo: null,
+  messageToForward: null,
   isUsersLoading: false,
   isMessagesLoading: false,
   searchQuery: "",
@@ -19,6 +20,7 @@ export const useChatStore = create((set, get) => ({
   page: 1,
 
   setReplyingTo: (message) => set({ replyingTo: message }),
+  setMessageToForward: (message) => set({ messageToForward: message }),
 
   getUsers: async () => {
     set({ isUsersLoading: true });
@@ -89,6 +91,24 @@ export const useChatStore = create((set, get) => ({
       set({ messages: [...messages, res.data], replyingTo: null });
     } catch (error) {
       toast.error(error.response?.data?.message || "Something went wrong");
+    }
+  },
+
+  forwardMessage: async (recipientIds, message) => {
+    try {
+      const promises = recipientIds.map(id => 
+        axiosInstance.post(`/messages/send/${id}`, {
+          text: message.text,
+          image: message.image,
+          audio: message.audio,
+          isForwarded: true,
+        })
+      );
+      await Promise.all(promises);
+      toast.success("Message forwarded");
+      set({ messageToForward: null });
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Failed to forward message");
     }
   },
 

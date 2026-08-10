@@ -106,7 +106,7 @@ export const getMessages = async (req, res) => {
 
 export const sendMessage = async (req, res) => {
   try {
-    const { text, image, audio, replyTo } = req.body;
+    const { text, image, audio, replyTo, isForwarded } = req.body;
     const { id: targetId } = req.params;
     const senderId = req.user._id;
 
@@ -165,6 +165,7 @@ export const sendMessage = async (req, res) => {
       audio: audioUrl,
       linkPreview,
       status: "sent",
+      isForwarded: isForwarded || false,
     });
 
     await newMessage.save();
@@ -341,18 +342,32 @@ export const reactToMessage = async (req, res) => {
       return res.status(404).json({ error: "Message not found" });
     }
 
-    const existingUserReactionIndex = message.reactions.findIndex(
-      (r) => r.userId.toString() === userId.toString()
-    );
+    if (message.groupId) {
+      // Group chat: multiple reactions allowed (1 per user)
+      const existingUserReactionIndex = message.reactions.findIndex(
+        (r) => r.userId.toString() === userId.toString()
+      );
 
-    if (existingUserReactionIndex !== -1) {
-      if (message.reactions[existingUserReactionIndex].emoji === emoji) {
-        message.reactions.splice(existingUserReactionIndex, 1);
+      if (existingUserReactionIndex !== -1) {
+        if (message.reactions[existingUserReactionIndex].emoji === emoji) {
+          message.reactions.splice(existingUserReactionIndex, 1);
+        } else {
+          message.reactions[existingUserReactionIndex].emoji = emoji;
+        }
       } else {
-        message.reactions[existingUserReactionIndex].emoji = emoji;
+        message.reactions.push({ userId, emoji });
       }
     } else {
-      message.reactions.push({ userId, emoji });
+      // 1-on-1 chat: only one reaction allowed on the entire message
+      if (
+        message.reactions.length > 0 &&
+        message.reactions[0].emoji === emoji &&
+        message.reactions[0].userId.toString() === userId.toString()
+      ) {
+        message.reactions = [];
+      } else {
+        message.reactions = [{ userId, emoji }];
+      }
     }
 
     await message.save();
