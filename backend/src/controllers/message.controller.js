@@ -5,6 +5,15 @@ import ogs from "open-graph-scraper";
 
 import cloudinary from "../lib/cloudinary.js";
 import { getReceiverSocketId, io } from "../lib/socket.js";
+import webpush from "web-push";
+
+// Configure web-push with VAPID keys
+// (Make sure to load dotenv before this in index.js, which is typical)
+webpush.setVapidDetails(
+  "mailto:contact@chatify.com",
+  process.env.VAPID_PUBLIC_KEY,
+  process.env.VAPID_PRIVATE_KEY
+);
 
 export const getUsersForSidebar = async (req, res) => {
   try {
@@ -172,6 +181,22 @@ export const sendMessage = async (req, res) => {
 
     const populatedMessage = await Message.findById(newMessage._id).populate("replyTo", "text image audio senderId");
 
+    const sendPushToUser = async (userIdToPush, pushMessage) => {
+      const userToPush = await User.findById(userIdToPush);
+      if (userToPush && userToPush.pushSubscriptions && userToPush.pushSubscriptions.length > 0) {
+        const payload = JSON.stringify({
+          title: "New Message",
+          body: pushMessage,
+        });
+        
+        userToPush.pushSubscriptions.forEach((sub) => {
+          webpush.sendNotification(sub, payload).catch((err) => {
+            console.error("Error sending push notification", err);
+          });
+        });
+      }
+    };
+
     if (groupId) {
       // Group message: emit to all members except sender
       group.members.forEach((memberId) => {
@@ -179,6 +204,8 @@ export const sendMessage = async (req, res) => {
           const socketId = getReceiverSocketId(memberId);
           if (socketId) {
             io.to(socketId).emit("newMessage", populatedMessage);
+          } else {
+            sendPushToUser(memberId, `New message in ${group.name}`);
           }
         }
       });
@@ -190,6 +217,9 @@ export const sendMessage = async (req, res) => {
         await newMessage.save();
         populatedMessage.status = "delivered";
         io.to(receiverSocketId).emit("newMessage", populatedMessage);
+      } else {
+        const sender = await User.findById(senderId);
+        sendPushToUser(receiverId, `New message from ${sender.fullName}`);
       }
     }
 
@@ -394,6 +424,31 @@ export const reactToMessage = async (req, res) => {
     res.status(200).json(message);
   } catch (error) {
     console.log("Error in reactToMessage controller: ", error.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+export const subscribeToPush = async (req, res) => {
+  try {
+    const subscription = req.body;
+    const userId = req.user._id;
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    // Check if subscription already exists to avoid duplicates
+    const exists = user.pushSubscriptions.some(
+      (sub) => sub.endpoint === subscription.endpoint
+    );
+
+    if (!exists) {
+      user.pushSubscriptions.push(subscription);
+      await user.save();
+    }
+
+    res.status(201).json({ message: "Subscription added successfully" });
+  } catch (error) {
+    console.error("Error in subscribeToPush: ", error.message);
     res.status(500).json({ error: "Internal server error" });
   }
 };

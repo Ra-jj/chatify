@@ -28,6 +28,10 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    pushSubscriptions: {
+      type: Array,
+      default: [],
+    },
   },
   { timestamps: true }
 );
