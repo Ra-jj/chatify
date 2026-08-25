@@ -2,33 +2,59 @@
 
 <div align="center">
   <img src="frontend/public/screenshot-for-readme.png" alt="Chatify App Preview" />
+
+  <p>A modern real-time chat application built with the MERN stack and Socket.io.</p>
+
+  <a href="https://rajcodes-chatify.onrender.com/" target="_blank"><strong>🌐 Live Demo</strong></a>
 </div>
 
-A modern real-time chat application built with the MERN stack and Socket.io. Features a custom amber & slate dark theme, real-time messaging, online presence indicators, and image sharing via Cloudinary.
+---
 
 ## ✨ Features
 
+### 💬 Messaging
 - **Real-time messaging** — Instant message delivery powered by Socket.io
-- **Infinite Scrolling & Pagination** — Cursor-based pagination for seamless message loading at scale
-- **Read Receipts & Typing Indicators** — Real-time WhatsApp-style blue ticks and typing status
-- **Message Management** — Edit, delete, and manage your sent messages
-- **User authentication** — Secure signup, login, and logout with JWT & HTTP-only cookies
-- **Online presence** — See who's currently active in real-time
+- **Voice notes** — Record and send audio messages with the built-in MediaRecorder
 - **Image sharing** — Send and receive images in chat, powered by Cloudinary
-- **Profile management** — Update your display picture anytime
-- **Theme switcher** — Choose from 30+ themes including the custom Chatify dark theme
-- **Responsive design** — Works seamlessly on desktop and mobile
+- **Link previews** — Automatic OpenGraph previews for shared URLs
+- **Emoji picker** — Rich emoji support in the message composer
+
+### 👥 Conversations
+- **Group chats** — Create groups, add members, and chat together
+- **Threaded replies** — Swipe-to-reply on mobile, click-to-reply on desktop
+- **Message forwarding** — Forward messages to multiple users or groups at once
+- **Infinite scrolling** — Cursor-based pagination for seamless message loading at scale
+
+### ✏️ Message Management
+- **Edit messages** — Modify your sent messages with an inline editor
+- **Delete messages** — Delete for yourself or for everyone (WhatsApp-style)
+- **Reactions** — React to any message with quick emoji reactions (👍 ❤️ 😂 😮 😢 🙏)
+- **Read receipts & typing indicators** — Real-time blue ticks and typing status
+
+### 🔐 Auth & Security
+- **Secure authentication** — Signup, login, and logout with JWT & HTTP-only cookies
+- **Single active session** — Prevents concurrent logins from multiple devices
+- **Online presence** — See who's currently active with real-time last seen timestamps
+
+### 🎨 UI & Experience
+- **30+ themes** — Choose from a rich set of DaisyUI themes including the custom Chatify dark theme
+- **Responsive design** — Works seamlessly on desktop, tablet, and mobile
+- **Profile management** — Update your display picture, view other users' profiles
+- **PWA support** — Installable as a Progressive Web App with push notifications
+- **In-chat search** — Search through messages within a conversation
 
 ## 🛠️ Tech Stack
 
-| Layer             | Technology                                    |
-| ----------------- | --------------------------------------------- |
-| **Frontend**      | React 18, Vite, TailwindCSS, DaisyUI, Zustand |
-| **Backend**       | Node.js, Express.js                           |
-| **Database**      | MongoDB (Mongoose)                            |
-| **Real-time**     | Socket.io                                     |
-| **Auth**          | JSON Web Tokens (JWT)                         |
-| **Media Storage** | Cloudinary                                    |
+| Layer              | Technology                                    |
+| ------------------ | --------------------------------------------- |
+| **Frontend**       | React 18, Vite, TailwindCSS, DaisyUI, Zustand |
+| **Backend**        | Node.js, Express.js                           |
+| **Database**       | MongoDB (Mongoose)                            |
+| **Real-time**      | Socket.io                                     |
+| **Auth**           | JSON Web Tokens (JWT)                         |
+| **Media Storage**  | Cloudinary                                    |
+| **Push Notifications** | Web Push (VAPID)                          |
+| **PWA**            | Workbox (vite-plugin-pwa)                     |
 
 ## 📋 Prerequisites
 
@@ -66,8 +92,25 @@ CLOUDINARY_CLOUD_NAME=your_cloud_name
 CLOUDINARY_API_KEY=your_api_key
 CLOUDINARY_API_SECRET=your_api_secret
 
+VAPID_PUBLIC_KEY=your_vapid_public_key
+VAPID_PRIVATE_KEY=your_vapid_private_key
+
 NODE_ENV=development
 ```
+
+Create a `.env` file inside the `frontend/` directory:
+
+```bash
+touch frontend/.env
+```
+
+Add the following variable:
+
+```env
+VITE_VAPID_PUBLIC_KEY=your_vapid_public_key
+```
+
+> **Tip:** Generate VAPID keys using `npx web-push generate-vapid-keys`
 
 ### 3. Install dependencies
 
@@ -116,20 +159,20 @@ This installs all dependencies, builds the frontend, and serves everything from 
 chatify/
 ├── backend/
 │   └── src/
-│       ├── controllers/     # Route handlers (auth, messages)
+│       ├── controllers/     # Route handlers (auth, messages, groups)
 │       ├── lib/             # DB connection, Cloudinary, Socket.io, utilities
 │       ├── middleware/       # JWT authentication middleware
-│       ├── models/           # Mongoose schemas (User, Message)
+│       ├── models/           # Mongoose schemas (User, Message, Group)
 │       ├── routes/           # Express route definitions
-│       ├── seeds/            # Database seed data
 │       └── index.js          # Server entry point
 ├── frontend/
 │   └── src/
 │       ├── components/       # Reusable UI components
 │       ├── constants/        # Theme definitions
-│       ├── lib/              # Axios instance, helper utilities
+│       ├── lib/              # Axios instance, push notifications, utilities
 │       ├── pages/            # Route-level page components
 │       ├── store/            # Zustand state management
+│       ├── sw.js             # Service worker (PWA + push)
 │       ├── App.jsx           # Root component with routing
 │       └── main.jsx          # Application entry point
 └── package.json              # Root scripts (build & start)
