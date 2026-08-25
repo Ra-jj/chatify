@@ -1,6 +1,6 @@
 import { useChatStore } from "../store/useChatStore";
 import { useEffect, useRef, useState } from "react";
-import { Trash2, X, Edit2, Check, CheckCheck, Loader2, Ban, Smile, Reply, Forward } from "lucide-react";
+import { Trash2, X, Edit2, Check, CheckCheck, Loader2, Ban, Smile, Reply } from "lucide-react";
 
 import ChatHeader from "./ChatHeader";
 import MessageInput from "./MessageInput";
@@ -8,14 +8,7 @@ import MessageSkeleton from "./skeletons/MessageSkeleton";
 import { useAuthStore } from "../store/useAuthStore";
 import { formatMessageTime } from "../lib/utils";
 import ForwardMessageModal from "./ForwardMessageModal";
-
-const DoubleForwardIcon = ({ className }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <polyline points="11 17 16 12 11 7" />
-    <polyline points="16 17 21 12 16 7" />
-    <path d="M4 18v-2a4 4 0 0 1 4-4h8" />
-  </svg>
-);
+import DoubleForwardIcon from "./DoubleForwardIcon";
 
 const SwipeableBubble = ({ children, isMine, onReply, onLongPress }) => {
   const [offsetX, setOffsetX] = useState(0);

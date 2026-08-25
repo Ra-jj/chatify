@@ -36,10 +36,11 @@ const CreateGroupModal = ({ isOpen, onClose }) => {
     try {
       await createGroup(groupName, selectedMembers);
       onClose();
+      toast.success("Group created successfully!");
       setGroupName("");
       setSelectedMembers([]);
-    } catch (error) {
-      // Error handled in store
+    } catch {
+      toast.error("Failed to create group");
     } finally {
       setIsLoading(false);
     }
