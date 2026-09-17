@@ -1,6 +1,8 @@
 import jwt from "jsonwebtoken";
 import User from "../models/user.model.js";
 
+const JWT_VERIFY_ERROR_NAMES = new Set(["JsonWebTokenError", "TokenExpiredError", "NotBeforeError"]);
+
 export const protectRoute = async (req, res, next) => {
   try {
     const token = req.cookies.jwt;
@@ -15,7 +17,8 @@ export const protectRoute = async (req, res, next) => {
       return res.status(401).json({ message: "Unauthorized - Invalid Token" });
     }
 
-    const user = await User.findById(decoded.userId).select("-password");
+    // sessionId stays loaded for the check below; responses must not send req.user as-is.
+    const user = await User.findById(decoded.userId).select("-password -pushSubscriptions");
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });
@@ -30,6 +33,12 @@ export const protectRoute = async (req, res, next) => {
 
     next();
   } catch (error) {
+    // jwt.verify throws these for malformed, forged, expired or not-yet-valid tokens
+    if (JWT_VERIFY_ERROR_NAMES.has(error.name)) {
+      res.cookie("jwt", "", { maxAge: 0 });
+      return res.status(401).json({ message: "Unauthorized - Invalid Token" });
+    }
+
     console.log("Error in protectRoute middleware: ", error.message);
     res.status(500).json({ message: "Internal server error" });
   }

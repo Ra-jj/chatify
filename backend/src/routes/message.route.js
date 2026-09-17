@@ -1,5 +1,6 @@
 import express from "express";
 import { protectRoute } from "../middleware/auth.middleware.js";
+import { sendMessageRateLimiter } from "../middleware/rateLimit.middleware.js";
 import { getMessages, getUsersForSidebar, getAllUsers, sendMessage, deleteMessage, editMessage, markMessagesAsRead, reactToMessage, subscribeToPush } from "../controllers/message.controller.js";
 
 const router = express.Router();
@@ -9,7 +10,7 @@ router.get("/all-users", protectRoute, getAllUsers);
 router.post("/push-subscribe", protectRoute, subscribeToPush);
 router.get("/:id", protectRoute, getMessages);
 
-router.post("/send/:id", protectRoute, sendMessage);
+router.post("/send/:id", protectRoute, sendMessageRateLimiter, sendMessage);
 router.post("/mark-read/:id", protectRoute, markMessagesAsRead);
 router.delete("/:id", protectRoute, deleteMessage);
 router.put("/:id", protectRoute, editMessage);

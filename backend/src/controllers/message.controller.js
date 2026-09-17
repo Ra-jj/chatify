@@ -1,19 +1,139 @@
 import User from "../models/user.model.js";
 import Message from "../models/message.model.js";
 import Group from "../models/group.model.js";
-import ogs from "open-graph-scraper";
 
 import cloudinary from "../lib/cloudinary.js";
 import { getReceiverSocketId, io } from "../lib/socket.js";
+import { fetchLinkPreview } from "../lib/linkPreview.js";
+import { PUBLIC_USER_FIELDS, isAllowedAudioInput, isAllowedImageInput, isValidObjectId } from "../lib/utils.js";
 import webpush from "web-push";
 
-// Configure web-push with VAPID keys
-// (Make sure to load dotenv before this in index.js, which is typical)
+// Configure web-push with VAPID keys.
+// index.js imports "dotenv/config" before any other module, so process.env is populated here.
 webpush.setVapidDetails(
   "mailto:contact@chatify.com",
   process.env.VAPID_PUBLIC_KEY,
   process.env.VAPID_PRIVATE_KEY
 );
+
+const MAX_MESSAGE_TEXT_LENGTH = 5000;
+const MAX_MESSAGES_PAGE_SIZE = 100;
+const MAX_PUSH_SUBSCRIPTIONS_PER_USER = 5;
+const MAX_PUSH_ENDPOINT_LENGTH = 2048;
+const MAX_PUSH_KEY_LENGTH = 512;
+// Must match EMOJIS in frontend/src/components/ChatContainer.jsx
+const ALLOWED_REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
+
+const isProvided = (value) => value !== undefined && value !== null && value !== "";
+
+const isGroupMember = (group, userId) =>
+  group.members.some((memberId) => memberId.toString() === userId.toString());
+
+// Resolves a chat :id to a group the requester belongs to, or to another existing user.
+// Returns { group } or { receiver } on success, { status, error } otherwise.
+const resolveChatTarget = async (targetId, requesterId) => {
+  if (!isValidObjectId(targetId)) {
+    return { status: 400, error: "Invalid id" };
+  }
+
+  const group = await Group.findById(targetId);
+  if (group) {
+    return isGroupMember(group, requesterId)
+      ? { group }
+      : { status: 403, error: "You are not a member of this group" };
+  }
+
+  const receiver = await User.findById(targetId).select("_id");
+  if (!receiver) {
+    return { status: 404, error: "User not found" };
+  }
+
+  if (receiver._id.toString() === requesterId.toString()) {
+    return { status: 400, error: "Cannot open a chat with yourself" };
+  }
+
+  return { receiver };
+};
+
+// DM messages belong to their sender and receiver; group messages to the group's current members.
+// The group is returned so callers can notify its members without loading it again.
+const checkMessageAccess = async (message, userId) => {
+  if (message.groupId) {
+    const group = await Group.findById(message.groupId);
+    return { isAllowed: Boolean(group) && isGroupMember(group, userId), group };
+  }
+
+  const userIdString = userId.toString();
+  const isParticipant =
+    message.senderId?.toString() === userIdString || message.receiverId?.toString() === userIdString;
+  return { isAllowed: isParticipant, group: null };
+};
+
+const isMessageInConversation = (messageId, { groupId, userId, otherUserId }) => {
+  const conversationFilter = groupId
+    ? { groupId }
+    : {
+        $or: [
+          { senderId: userId, receiverId: otherUserId },
+          { senderId: otherUserId, receiverId: userId },
+        ],
+      };
+
+  return Message.exists({ _id: messageId, ...conversationFilter });
+};
+
+const isHttpsUrl = (value) => {
+  if (typeof value !== "string") return false;
+  try {
+    return new URL(value).protocol === "https:";
+  } catch {
+    return false;
+  }
+};
+
+const isBoundedString = (value, maxLength) =>
+  typeof value === "string" && value.length > 0 && value.length <= maxLength;
+
+const isValidPushSubscription = (subscription) =>
+  isHttpsUrl(subscription?.endpoint) &&
+  subscription.endpoint.length <= MAX_PUSH_ENDPOINT_LENGTH &&
+  isBoundedString(subscription.keys?.p256dh, MAX_PUSH_KEY_LENGTH) &&
+  isBoundedString(subscription.keys?.auth, MAX_PUSH_KEY_LENGTH);
+
+const removePushSubscription = async (userId, endpoint) => {
+  try {
+    await User.updateOne({ _id: userId }, { $pull: { pushSubscriptions: { endpoint } } });
+    console.log("Removed a push subscription that returned 404/410 for user", userId.toString());
+  } catch (error) {
+    console.error("Error removing push subscription:", error.message);
+  }
+};
+
+// Fetches the preview for a message that has already been saved and sent, stores it, and
+// pushes the updated message to everyone in the conversation (sender included) as
+// "messageEdited", which the frontend already handles by replacing the message by _id.
+// Never throws.
+const attachLinkPreview = async (messageId, text, conversationUserIds) => {
+  try {
+    const linkPreview = await fetchLinkPreview(text);
+    if (!linkPreview) return;
+
+    const updatedMessage = await Message.findOneAndUpdate(
+      { _id: messageId, isDeletedForEveryone: false },
+      { $set: { linkPreview } },
+      { new: true }
+    ).populate("replyTo", "text image audio senderId");
+
+    if (!updatedMessage) return;
+
+    conversationUserIds.forEach((userId) => {
+      const socketId = getReceiverSocketId(userId);
+      if (socketId) io.to(socketId).emit("messageEdited", updatedMessage);
+    });
+  } catch (error) {
+    console.log("Error saving link preview:", error.message);
+  }
+};
 
 export const getUsersForSidebar = async (req, res) => {
   try {
@@ -37,7 +157,7 @@ export const getUsersForSidebar = async (req, res) => {
 
     const filteredUsers = await User.find({ 
       _id: { $in: Array.from(userIdsWithHistory) } 
-    }).select("-password");
+    }).select(PUBLIC_USER_FIELDS);
 
     const unreadMessages = await Message.aggregate([
       { $match: { receiverId: loggedInUserId, status: { $ne: "read" } } },
@@ -64,7 +184,7 @@ export const getUsersForSidebar = async (req, res) => {
 export const getAllUsers = async (req, res) => {
   try {
     const loggedInUserId = req.user._id;
-    const allUsers = await User.find({ _id: { $ne: loggedInUserId } }).select("-password");
+    const allUsers = await User.find({ _id: { $ne: loggedInUserId } }).select(PUBLIC_USER_FIELDS);
     res.status(200).json(allUsers);
   } catch (error) {
     console.error("Error in getAllUsers: ", error.message);
@@ -76,20 +196,23 @@ export const getMessages = async (req, res) => {
   try {
     const { id: userToChatId } = req.params;
     const myId = req.user._id;
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 50;
+    const page = Math.max(parseInt(req.query.page) || 1, 1);
+    const limit = Math.min(Math.max(parseInt(req.query.limit) || 50, 1), MAX_MESSAGES_PAGE_SIZE);
     const skip = (page - 1) * limit;
 
+    const target = await resolveChatTarget(userToChatId, myId);
+    if (target.error) {
+      return res.status(target.status).json({ error: target.error });
+    }
+
     let query = { deletedFor: { $ne: myId } };
-    
-    // Check if it's a group
-    const group = await Group.findById(userToChatId).catch(() => null);
-    if (group) {
-      query.groupId = group._id;
+
+    if (target.group) {
+      query.groupId = target.group._id;
     } else {
       query.$or = [
-        { senderId: myId, receiverId: userToChatId },
-        { senderId: userToChatId, receiverId: myId },
+        { senderId: myId, receiverId: target.receiver._id },
+        { senderId: target.receiver._id, receiverId: myId },
       ];
     }
 
@@ -119,62 +242,72 @@ export const sendMessage = async (req, res) => {
     const { id: targetId } = req.params;
     const senderId = req.user._id;
 
+    if (isProvided(text) && typeof text !== "string") {
+      return res.status(400).json({ error: "Message text must be a string" });
+    }
+
+    if (typeof text === "string" && text.length > MAX_MESSAGE_TEXT_LENGTH) {
+      return res.status(400).json({ error: `Message text must be at most ${MAX_MESSAGE_TEXT_LENGTH} characters` });
+    }
+
+    if (isProvided(image) && !isAllowedImageInput(image)) {
+      return res.status(400).json({ error: "Image must be an image data URI or an uploaded image URL" });
+    }
+
+    if (isProvided(audio) && !isAllowedAudioInput(audio)) {
+      return res.status(400).json({ error: "Audio must be an audio data URI or an uploaded audio URL" });
+    }
+
+    const hasText = typeof text === "string" && text.trim().length > 0;
+    if (!hasText && !isProvided(image) && !isProvided(audio)) {
+      return res.status(400).json({ error: "Message must include text, an image or audio" });
+    }
+
+    const target = await resolveChatTarget(targetId, senderId);
+    if (target.error) {
+      return res.status(target.status).json({ error: target.error });
+    }
+
+    const group = target.group ?? null;
+    const groupId = group?._id ?? null;
+    const receiverId = target.receiver?._id ?? null;
+
+    let replyToId;
+    if (isProvided(replyTo)) {
+      const isValidReply =
+        isValidObjectId(replyTo) &&
+        (await isMessageInConversation(replyTo, { groupId, userId: senderId, otherUserId: receiverId }));
+
+      if (!isValidReply) {
+        return res.status(400).json({ error: "Reply target must be a message in this conversation" });
+      }
+      replyToId = replyTo;
+    }
+
     let imageUrl;
-    if (image) {
+    if (isProvided(image)) {
       const uploadResponse = await cloudinary.uploader.upload(image);
       imageUrl = uploadResponse.secure_url;
     }
 
     let audioUrl;
-    if (audio) {
+    if (isProvided(audio)) {
       const uploadResponse = await cloudinary.uploader.upload(audio, {
         resource_type: "video",
       });
       audioUrl = uploadResponse.secure_url;
     }
 
-    let linkPreview = null;
-    if (text) {
-      const urlRegex = /(https?:\/\/[^\s]+)/g;
-      const urls = text.match(urlRegex);
-      if (urls && urls.length > 0) {
-        try {
-          const { result } = await ogs({ url: urls[0] });
-          if (result.success) {
-            linkPreview = {
-              title: result.ogTitle,
-              description: result.ogDescription,
-              image: result.ogImage?.[0]?.url,
-              url: result.ogUrl || urls[0],
-            };
-          }
-        } catch (error) {
-          console.log("Error fetching link preview:", error.message);
-        }
-      }
-    }
-
-    let receiverId = null;
-    let groupId = null;
-    const group = await Group.findById(targetId).catch(() => null);
-
-    if (group) {
-      groupId = group._id;
-    } else {
-      receiverId = targetId;
-    }
-
     const newMessage = new Message({
       senderId,
       receiverId,
       groupId,
-      replyTo,
+      replyTo: replyToId,
       text,
       image: imageUrl,
       audio: audioUrl,
-      linkPreview,
       status: "sent",
-      isForwarded: isForwarded || false,
+      isForwarded: isForwarded === true,
     });
 
     await newMessage.save();
@@ -182,18 +315,26 @@ export const sendMessage = async (req, res) => {
     const populatedMessage = await Message.findById(newMessage._id).populate("replyTo", "text image audio senderId");
 
     const sendPushToUser = async (userIdToPush, pushMessage) => {
-      const userToPush = await User.findById(userIdToPush);
-      if (userToPush && userToPush.pushSubscriptions && userToPush.pushSubscriptions.length > 0) {
-        const payload = JSON.stringify({
-          title: "New Message",
-          body: pushMessage,
-        });
-        
-        userToPush.pushSubscriptions.forEach((sub) => {
-          webpush.sendNotification(sub, payload).catch((err) => {
-            console.error("Error sending push notification", err);
+      try {
+        const userToPush = await User.findById(userIdToPush).select("pushSubscriptions");
+        if (userToPush && userToPush.pushSubscriptions && userToPush.pushSubscriptions.length > 0) {
+          const payload = JSON.stringify({
+            title: "New Message",
+            body: pushMessage,
           });
-        });
+
+          userToPush.pushSubscriptions.forEach((sub) => {
+            webpush.sendNotification(sub, payload).catch((err) => {
+              // Push services answer 404/410 for subscriptions that have expired or been unsubscribed
+              if (err.statusCode === 404 || err.statusCode === 410) {
+                return removePushSubscription(userIdToPush, sub.endpoint);
+              }
+              console.error("Error sending push notification", err);
+            });
+          });
+        }
+      } catch (error) {
+        console.error("Error loading push subscriptions:", error.message);
       }
     };
 
@@ -224,6 +365,12 @@ export const sendMessage = async (req, res) => {
     }
 
     res.status(201).json(populatedMessage);
+
+    // Runs after the response so a slow or hostile preview host cannot delay sending
+    if (hasText) {
+      const conversationUserIds = group ? group.members : [senderId, receiverId];
+      attachLinkPreview(newMessage._id, text, conversationUserIds);
+    }
   } catch (error) {
     console.log("Error in sendMessage controller: ", error.message);
     res.status(500).json({ error: "Internal server error" });
@@ -236,9 +383,18 @@ export const deleteMessage = async (req, res) => {
     const { type } = req.query; // "everyone" or "me"
     const userId = req.user._id;
 
+    if (!isValidObjectId(messageId)) {
+      return res.status(400).json({ error: "Invalid id" });
+    }
+
     const message = await Message.findById(messageId);
     if (!message) {
       return res.status(404).json({ error: "Message not found" });
+    }
+
+    const { isAllowed, group } = await checkMessageAccess(message, userId);
+    if (!isAllowed) {
+      return res.status(403).json({ error: "You are not a participant in this conversation" });
     }
 
     if (type === "everyone") {
@@ -250,11 +406,12 @@ export const deleteMessage = async (req, res) => {
       message.text = "";
       message.image = "";
       message.audio = "";
+      message.linkPreview = undefined;
+      message.reactions = [];
       await message.save();
 
       // Notify receivers
       if (message.groupId) {
-        const group = await Group.findById(message.groupId);
         if (group) {
           group.members.forEach((memberId) => {
             if (memberId.toString() !== userId.toString()) {
@@ -291,8 +448,16 @@ export const editMessage = async (req, res) => {
     const { text } = req.body;
     const senderId = req.user._id;
 
-    if (!text) {
+    if (!isValidObjectId(messageId)) {
+      return res.status(400).json({ error: "Invalid id" });
+    }
+
+    if (typeof text !== "string" || !text.trim()) {
       return res.status(400).json({ error: "Message text is required" });
+    }
+
+    if (text.length > MAX_MESSAGE_TEXT_LENGTH) {
+      return res.status(400).json({ error: `Message text must be at most ${MAX_MESSAGE_TEXT_LENGTH} characters` });
     }
 
     const message = await Message.findById(messageId).populate("replyTo", "text image audio senderId");
@@ -302,6 +467,10 @@ export const editMessage = async (req, res) => {
 
     if (message.senderId.toString() !== senderId.toString()) {
       return res.status(403).json({ error: "You can only edit your own messages" });
+    }
+
+    if (message.isDeletedForEveryone) {
+      return res.status(400).json({ error: "Deleted messages cannot be edited" });
     }
 
     message.text = text;
@@ -335,14 +504,20 @@ export const editMessage = async (req, res) => {
 
 export const markMessagesAsRead = async (req, res) => {
   try {
-    const { id: senderId } = req.params;
+    const { id: chatId } = req.params;
     const myId = req.user._id;
-    
-    // Check if it's a group, groups don't have read receipts built in yet, skip for now.
-    const group = await Group.findById(senderId).catch(() => null);
-    if (group) {
+
+    const target = await resolveChatTarget(chatId, myId);
+    if (target.error) {
+      return res.status(target.status).json({ error: target.error });
+    }
+
+    // Groups don't have read receipts built in yet, skip for now.
+    if (target.group) {
       return res.status(200).json({ message: "Skipped for group" });
     }
+
+    const senderId = target.receiver._id;
 
     await Message.updateMany(
       { senderId, receiverId: myId, status: { $ne: "read" } },
@@ -367,9 +542,26 @@ export const reactToMessage = async (req, res) => {
     const { emoji } = req.body;
     const userId = req.user._id;
 
+    if (!isValidObjectId(messageId)) {
+      return res.status(400).json({ error: "Invalid id" });
+    }
+
+    if (!ALLOWED_REACTION_EMOJIS.includes(emoji)) {
+      return res.status(400).json({ error: "Unsupported reaction emoji" });
+    }
+
     const message = await Message.findById(messageId).populate("replyTo", "text image audio senderId");
     if (!message) {
       return res.status(404).json({ error: "Message not found" });
+    }
+
+    const { isAllowed, group } = await checkMessageAccess(message, userId);
+    if (!isAllowed) {
+      return res.status(403).json({ error: "You are not a participant in this conversation" });
+    }
+
+    if (message.isDeletedForEveryone) {
+      return res.status(400).json({ error: "Deleted messages cannot be reacted to" });
     }
 
     if (message.groupId) {
@@ -404,7 +596,6 @@ export const reactToMessage = async (req, res) => {
 
     // Emit event to notify users
     if (message.groupId) {
-      const group = await Group.findById(message.groupId);
       if (group) {
         group.members.forEach((memberId) => {
           if (memberId.toString() !== userId.toString()) {
@@ -433,6 +624,10 @@ export const subscribeToPush = async (req, res) => {
     const subscription = req.body;
     const userId = req.user._id;
 
+    if (!isValidPushSubscription(subscription)) {
+      return res.status(400).json({ error: "Push subscription must include an https endpoint and p256dh/auth keys" });
+    }
+
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ error: "User not found" });
 
@@ -442,8 +637,18 @@ export const subscribeToPush = async (req, res) => {
     );
 
     if (!exists) {
-      user.pushSubscriptions.push(subscription);
-      await user.save();
+      // Only the fields web-push needs are stored, never the raw request body
+      const subscriptionToStore = {
+        endpoint: subscription.endpoint,
+        expirationTime: typeof subscription.expirationTime === "number" ? subscription.expirationTime : null,
+        keys: { p256dh: subscription.keys.p256dh, auth: subscription.keys.auth },
+      };
+
+      // $slice keeps the newest MAX_PUSH_SUBSCRIPTIONS_PER_USER entries and drops the oldest
+      await User.updateOne(
+        { _id: userId },
+        { $push: { pushSubscriptions: { $each: [subscriptionToStore], $slice: -MAX_PUSH_SUBSCRIPTIONS_PER_USER } } }
+      );
     }
 
     res.status(201).json({ message: "Subscription added successfully" });

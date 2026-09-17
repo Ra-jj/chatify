@@ -32,7 +32,7 @@ export const useChatStore = create((set, get) => ({
       ]);
       set({ users: usersRes.data, allUsers: allUsersRes.data, groups: groupsRes.data });
     } catch (error) {
-      toast.error(error.response?.data?.message || "Something went wrong");
+      toast.error(error.response?.data?.message || error.response?.data?.error || "Something went wrong");
     } finally {
       set({ isUsersLoading: false });
     }
@@ -41,11 +41,16 @@ export const useChatStore = create((set, get) => ({
   createGroup: async (name, members) => {
     try {
       const res = await axiosInstance.post("/groups", { name, members });
-      set((state) => ({ groups: [...state.groups, res.data] }));
+      // The newGroup socket event can add this group before the HTTP response arrives
+      set((state) =>
+        state.groups.some((group) => group._id === res.data._id)
+          ? state
+          : { groups: [...state.groups, res.data] }
+      );
       toast.success("Group created successfully");
       return res.data;
     } catch (error) {
-      toast.error(error.response?.data?.message || "Failed to create group");
+      toast.error(error.response?.data?.message || error.response?.data?.error || "Failed to create group");
       throw error;
     }
   },
@@ -62,7 +67,7 @@ export const useChatStore = create((set, get) => ({
       // Automatically mark as read when fetching messages
       get().markMessagesAsRead(userId);
     } catch (error) {
-      toast.error(error.response?.data?.message || "Something went wrong");
+      toast.error(error.response?.data?.message || error.response?.data?.error || "Something went wrong");
     } finally {
       set({ isMessagesLoading: false });
     }
@@ -90,7 +95,7 @@ export const useChatStore = create((set, get) => ({
       const res = await axiosInstance.post(`/messages/send/${selectedUser._id}`, messageData);
       set({ messages: [...messages, res.data], replyingTo: null });
     } catch (error) {
-      toast.error(error.response?.data?.message || "Something went wrong");
+      toast.error(error.response?.data?.message || error.response?.data?.error || "Something went wrong");
     }
   },
 
@@ -108,7 +113,7 @@ export const useChatStore = create((set, get) => ({
       toast.success("Message forwarded");
       set({ messageToForward: null });
     } catch (error) {
-      toast.error(error.response?.data?.message || "Failed to forward message");
+      toast.error(error.response?.data?.message || error.response?.data?.error || "Failed to forward message");
     }
   },
 
@@ -128,7 +133,7 @@ export const useChatStore = create((set, get) => ({
       }
       toast.success(type === "me" ? "Message deleted for you" : "Message deleted for everyone");
     } catch (error) {
-      toast.error(error.response?.data?.message || "Failed to delete message");
+      toast.error(error.response?.data?.message || error.response?.data?.error || "Failed to delete message");
     }
   },
 
@@ -142,7 +147,7 @@ export const useChatStore = create((set, get) => ({
       }));
       toast.success("Message edited");
     } catch (error) {
-      toast.error(error.response?.data?.message || "Failed to edit message");
+      toast.error(error.response?.data?.message || error.response?.data?.error || "Failed to edit message");
     }
   },
 
@@ -155,7 +160,7 @@ export const useChatStore = create((set, get) => ({
         ),
       }));
     } catch (error) {
-      toast.error(error.response?.data?.message || "Failed to react to message");
+      toast.error(error.response?.data?.message || error.response?.data?.error || "Failed to react to message");
     }
   },
 

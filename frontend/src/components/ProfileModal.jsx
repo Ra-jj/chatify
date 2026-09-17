@@ -1,4 +1,4 @@
-import { X, Mail, Calendar } from "lucide-react";
+import { X, Calendar } from "lucide-react";
 import { useState } from "react";
 import { useAuthStore } from "../store/useAuthStore";
 import { useChatStore } from "../store/useChatStore";
@@ -45,14 +45,6 @@ const ProfileModal = () => {
           </p>
 
           <div className="w-full space-y-4">
-            <div className="flex items-center gap-3 bg-base-200 p-3 rounded-lg">
-              <Mail className="size-5 text-zinc-400" />
-              <div className="flex flex-col">
-                <span className="text-xs text-zinc-500 uppercase font-semibold">Email</span>
-                <span className="text-sm truncate">{selectedProfileUser.email}</span>
-              </div>
-            </div>
-            
             <div className="flex items-center gap-3 bg-base-200 p-3 rounded-lg">
               <Calendar className="size-5 text-zinc-400" />
               <div className="flex flex-col">
