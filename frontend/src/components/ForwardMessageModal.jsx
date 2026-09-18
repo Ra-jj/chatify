@@ -1,15 +1,15 @@
 import { useState } from "react";
-import { X, Search } from "lucide-react";
 import { useChatStore } from "../store/useChatStore";
 
 import DoubleForwardIcon from "./DoubleForwardIcon";
+import ModalShell from "./ModalShell";
+import SearchField from "./SearchField";
+import Avatar from "./Avatar";
 
 const ForwardMessageModal = () => {
   const { allUsers, groups, messageToForward, setMessageToForward, forwardMessage } = useChatStore();
   const [search, setSearch] = useState("");
   const [selectedIds, setSelectedIds] = useState([]);
-
-  if (!messageToForward) return null;
 
   const combinedList = [
     ...allUsers.map(u => ({ ...u, isGroup: false })),
@@ -34,78 +34,65 @@ const ForwardMessageModal = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-base-200 w-full max-w-md rounded-2xl shadow-xl flex flex-col max-h-[90vh]">
-        <div className="flex justify-between items-center p-5 border-b border-base-300">
-          <h2 className="text-xl font-bold flex items-center gap-2">
-            <DoubleForwardIcon className="size-5 text-primary" />
-            Forward Message
-          </h2>
-          <button onClick={() => setMessageToForward(null)} className="btn btn-sm btn-circle btn-ghost">
-            <X className="size-5" />
+    <ModalShell
+      isOpen={Boolean(messageToForward)}
+      title="Forward message"
+      icon={<DoubleForwardIcon className="size-[18px] text-base-content/75" />}
+      onClose={() => setMessageToForward(null)}
+      zIndexClassName="z-[100]"
+      footer={
+        <>
+          <button
+            type="button"
+            onClick={() => setMessageToForward(null)}
+            className="btn btn-ghost btn-sm h-9 rounded-lg px-4 font-medium"
+          >
+            Cancel
           </button>
-        </div>
-
-        <div className="p-5 overflow-y-auto flex-1 flex flex-col gap-4">
-          <div className="form-control">
-            <div className="relative mb-2">
-              <Search className="size-4 absolute left-3 top-3.5 text-base-content/50" />
-              <input
-                type="text"
-                placeholder="Search to forward..."
-                className="input input-sm input-bordered w-full pl-9"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </div>
-            
-            <div className="flex flex-col gap-1 max-h-64 overflow-y-auto pr-2">
-              {filteredList.map((item) => (
-                <label
-                  key={item._id}
-                  className="flex items-center gap-3 p-3 rounded-xl hover:bg-base-300 transition-colors w-full cursor-pointer"
-                >
-                  <input 
-                    type="checkbox" 
-                    className="checkbox checkbox-sm checkbox-primary shrink-0" 
-                    checked={selectedIds.includes(item._id)}
-                    onChange={() => toggleSelection(item._id)}
-                  />
-                  <div className="avatar shrink-0">
-                    <div className="size-10 rounded-full">
-                      <img
-                        src={item.profilePic || "/avatar.png"}
-                        alt={item.fullName}
-                      />
-                    </div>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium truncate">{item.fullName}</div>
-                    {item.isGroup && <div className="text-xs text-zinc-400">Group</div>}
-                  </div>
-                </label>
-              ))}
-              {filteredList.length === 0 && (
-                <div className="text-center text-zinc-500 py-8 text-sm">
-                  No contacts found
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="p-4 border-t border-base-300 flex justify-end gap-2">
-          <button onClick={() => setMessageToForward(null)} className="btn btn-ghost">Cancel</button>
-          <button 
-            onClick={handleForward} 
-            className="btn btn-primary"
+          <button
+            type="button"
+            onClick={handleForward}
+            className="btn btn-primary btn-sm h-9 rounded-lg px-4 font-medium"
             disabled={selectedIds.length === 0}
           >
             Forward ({selectedIds.length})
           </button>
-        </div>
+        </>
+      }
+    >
+      <div className="sticky top-0 z-10 bg-base-100 px-5 pb-2 pt-4">
+        <SearchField value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search people and groups" />
       </div>
-    </div>
+
+      <div className="flex flex-col px-3 pb-3">
+        {filteredList.map((item) => {
+          const isSelected = selectedIds.includes(item._id);
+          return (
+            <label
+              key={item._id}
+              className={`flex w-full cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 transition-colors ${
+                isSelected ? "bg-base-200" : "hover:bg-base-200/60"
+              }`}
+            >
+              <Avatar src={item.profilePic} isGroup={item.isGroup} />
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[15px] font-semibold">{item.fullName}</div>
+                {item.isGroup && <div className="text-[13px] text-base-content/75">Group</div>}
+              </div>
+              <input
+                type="checkbox"
+                className="checkbox checkbox-sm shrink-0 rounded-md border-base-content/30 [--chkbg:oklch(var(--p))] [--chkfg:oklch(var(--pc))] checked:border-primary"
+                checked={isSelected}
+                onChange={() => toggleSelection(item._id)}
+              />
+            </label>
+          );
+        })}
+        {filteredList.length === 0 && (
+          <p className="py-10 text-center text-sm text-base-content/75">No contacts found</p>
+        )}
+      </div>
+    </ModalShell>
   );
 };
 

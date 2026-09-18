@@ -1,35 +1,31 @@
-import { Users } from "lucide-react";
-
-const SidebarSkeleton = () => {
-  // Create 8 skeleton items
-  const skeletonContacts = Array(8).fill(null);
+// Mirrors Sidebar: title row, segmented control, toggle row, then 44px-avatar rows
+const SidebarSkeleton = ({ className = "flex h-full w-full flex-col border-r border-base-content/10 md:w-72 lg:w-80" }) => {
+  const skeletonRows = Array(8).fill(null);
 
   return (
-    <aside
-      className="h-full w-20 lg:w-72 border-r border-base-300 
-    flex flex-col transition-all duration-200"
-    >
-      {/* Header */}
-      <div className="border-b border-base-300 w-full p-5">
-        <div className="flex items-center gap-2">
-          <Users className="w-6 h-6" />
-          <span className="font-medium hidden lg:block">Contacts</span>
+    <aside className={className} aria-busy="true" aria-label="Loading conversations">
+      <div className="flex flex-col gap-3 px-4 pb-3 pt-4">
+        <div className="flex h-8 items-center justify-between">
+          <div className="skeleton h-5 w-16 rounded-md" />
+          <div className="flex gap-2">
+            <div className="skeleton size-7 rounded-full" />
+            <div className="skeleton size-7 rounded-full" />
+          </div>
+        </div>
+        <div className="skeleton h-8 w-full rounded-lg" />
+        <div className="flex items-center justify-between">
+          <div className="skeleton h-3.5 w-24 rounded" />
+          <div className="skeleton h-4 w-7 rounded-full" />
         </div>
       </div>
 
-      {/* Skeleton Contacts */}
-      <div className="overflow-y-auto w-full py-3">
-        {skeletonContacts.map((_, idx) => (
-          <div key={idx} className="w-full p-3 flex items-center gap-3">
-            {/* Avatar skeleton */}
-            <div className="relative mx-auto lg:mx-0">
-              <div className="skeleton size-12 rounded-full" />
-            </div>
-
-            {/* User info skeleton - only visible on larger screens */}
-            <div className="hidden lg:block text-left min-w-0 flex-1">
-              <div className="skeleton h-4 w-32 mb-2" />
-              <div className="skeleton h-3 w-16" />
+      <div className="flex-1 overflow-hidden px-2">
+        {skeletonRows.map((_, idx) => (
+          <div key={idx} className="flex items-center gap-3 px-2.5 py-2">
+            <div className="skeleton size-11 shrink-0 rounded-full" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <div className={`skeleton h-3.5 rounded ${idx % 3 === 0 ? "w-2/3" : idx % 3 === 1 ? "w-1/2" : "w-3/5"}`} />
+              <div className="skeleton h-3 w-16 rounded" />
             </div>
           </div>
         ))}

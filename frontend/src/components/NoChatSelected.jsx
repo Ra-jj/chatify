@@ -1,33 +1,33 @@
+import { SquarePen, UsersRound } from "lucide-react";
 import Logo from "./Logo";
 
-const NoChatSelected = () => {
+const NoChatSelected = ({ onNewChat, onNewGroup }) => {
   return (
-    <div 
-      className="hidden sm:flex w-full flex-1 flex-col items-center justify-center p-16 relative overflow-hidden"
-      style={{ 
-        backgroundImage: "url('/doodle-bg.png')", 
-        backgroundRepeat: "repeat",
-        backgroundSize: "400px" 
-      }}
-    >
-      {/* Optional dark overlay for better text readability */}
-      <div className="absolute inset-0 bg-base-100/50 mix-blend-overlay"></div>
+    <div className="bg-dot-grid hidden min-w-0 flex-1 flex-col items-center justify-center p-10 text-base-content md:flex">
+      <div className="flex max-w-md flex-col items-center text-center">
+        <Logo className="size-12" />
 
-      <div className="max-w-md text-center space-y-6 relative z-10 p-8 rounded-3xl bg-base-100/20 backdrop-blur-sm border border-white/5 shadow-2xl">
-        {/* Icon Display */}
-        <div className="flex justify-center gap-4 mb-4">
-          <div className="relative">
-            <div className="flex items-center justify-center animate-bounce">
-              <Logo className="w-16 h-16" zapSize="w-8 h-8" />
-            </div>
-          </div>
-        </div>
-
-        {/* Welcome Text */}
-        <h2 className="text-2xl font-bold">Welcome to Chatify!</h2>
-        <p className="text-base-content/60">
-          Select a conversation from the sidebar to start chatting
+        <h2 className="mt-6 font-display text-[2.75rem] leading-[1.05] tracking-tight">
+          Pick up where you left off
+        </h2>
+        <p className="mt-3 text-[15px] text-base-content/75">
+          Choose a conversation from the list, or start a new one.
         </p>
+
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-2">
+          <button type="button" onClick={onNewChat} className="btn btn-primary btn-sm h-9 rounded-full px-4 font-medium">
+            <SquarePen className="size-4" aria-hidden="true" />
+            New chat
+          </button>
+          <button
+            type="button"
+            onClick={onNewGroup}
+            className="btn btn-outline btn-sm h-9 rounded-full border-base-content/15 px-4 font-medium hover:border-base-content/25 hover:bg-base-200 hover:text-base-content"
+          >
+            <UsersRound className="size-4" aria-hidden="true" />
+            New group
+          </button>
+        </div>
       </div>
     </div>
   );

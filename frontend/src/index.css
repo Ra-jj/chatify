@@ -2,9 +2,78 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Chatify: squared message bubbles with slightly rounded corners.
-   Overrides daisyUI's default pill-shaped .chat-bubble while keeping
-   its color theming intact. */
-.chat-bubble {
-  border-radius: 0.5rem !important;
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply antialiased;
+  }
+
+  /* A consistent focus ring for custom controls. :where() keeps specificity at zero,
+     so daisyUI components and utility classes with their own focus styles still win. */
+  :where(a, button, [role="button"], [tabindex], summary, input, textarea, select):focus-visible {
+    outline: 2px solid oklch(var(--p));
+    outline-offset: 2px;
+  }
+
+  /* daisyUI blanks the outline of anything focused inside a dropdown
+     (.dropdown > *:not(summary):focus, specificity 0,2,1), which hid the ring on the Account menu
+     and message-action triggers. This selector (0,3,0) puts a visible ring back for keyboard users. */
+  .dropdown > [tabindex]:focus-visible {
+    outline: 2px solid oklch(var(--p));
+    outline-offset: 2px;
+  }
+
+  /* Thin, theme-aware scrollbars */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklab, oklch(var(--bc)) 22%, transparent) transparent;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: color-mix(in oklab, oklch(var(--bc)) 22%, transparent);
+    border: 2px solid transparent;
+    border-radius: 9999px;
+    background-clip: content-box;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer utilities {
+  /* Barely-there dot grid for chat backgrounds. Set it on an element whose `color`
+     is base-content, so the dots follow the active theme. */
+  .bg-dot-grid {
+    background-image: radial-gradient(color-mix(in oklab, currentColor 8%, transparent) 1px, transparent 1px);
+    background-size: 20px 20px;
+    background-position: -10px -10px;
+  }
+
+  /* Primary-hued text for small labels (typing…, reply names). Plain `text-primary` measured
+     below 4.5:1 on base-100 in chatify, business, corporate, nord and emerald. 35% primary mixed
+     into base-content is the highest primary share that measured >= 4.5:1 on base-100 and
+     base-200 in all 10 themes (see the contrast audit in the redesign handoff). */
+  .text-primary-ink {
+    color: color-mix(in oklab, oklch(var(--p)) 35%, oklch(var(--bc)));
+  }
 }

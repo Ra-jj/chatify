@@ -1,24 +1,28 @@
+// Placeholder bubbles in the same shapes as real messages: incoming left, own right
+const SKELETON_BUBBLES = [
+  { isMine: false, widthClassName: "w-48", heightClassName: "h-10", isFirstOfRun: true },
+  { isMine: false, widthClassName: "w-64", heightClassName: "h-14", isFirstOfRun: false },
+  { isMine: true, widthClassName: "w-40", heightClassName: "h-10", isFirstOfRun: true },
+  { isMine: false, widthClassName: "w-56", heightClassName: "h-10", isFirstOfRun: true },
+  { isMine: true, widthClassName: "w-60", heightClassName: "h-14", isFirstOfRun: true },
+  { isMine: true, widthClassName: "w-32", heightClassName: "h-10", isFirstOfRun: false },
+];
+
 const MessageSkeleton = () => {
-  // Create an array of 6 items for skeleton messages
-  const skeletonMessages = Array(6).fill(null);
-
   return (
-    <div className="flex-1 overflow-y-auto p-4 space-y-4">
-      {skeletonMessages.map((_, idx) => (
-        <div key={idx} className={`chat ${idx % 2 === 0 ? "chat-start" : "chat-end"}`}>
-          <div className="chat-image avatar">
-            <div className="size-10 rounded-full">
-              <div className="skeleton w-full h-full rounded-full" />
-            </div>
-          </div>
-
-          <div className="chat-header mb-1">
-            <div className="skeleton h-4 w-16" />
-          </div>
-
-          <div className="chat-bubble bg-transparent p-0">
-            <div className="skeleton h-16 w-[200px]" />
-          </div>
+    <div className="min-h-0 flex-1 overflow-hidden px-3 pb-4 pt-10 sm:px-6" aria-busy="true" aria-label="Loading messages">
+      {SKELETON_BUBBLES.map((bubble, idx) => (
+        <div
+          key={idx}
+          className={`flex ${bubble.isMine ? "justify-end" : "justify-start"} ${
+            idx === 0 ? "" : bubble.isFirstOfRun ? "mt-4" : "mt-1"
+          }`}
+        >
+          <div
+            className={`skeleton max-w-[75%] rounded-2xl sm:max-w-[65%] ${bubble.widthClassName} ${bubble.heightClassName} ${
+              bubble.isFirstOfRun ? (bubble.isMine ? "rounded-tr-md" : "rounded-tl-md") : ""
+            }`}
+          />
         </div>
       ))}
     </div>

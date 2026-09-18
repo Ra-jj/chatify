@@ -26,8 +26,8 @@ const App = () => {
 
   if (isCheckingAuth && !authUser)
     return (
-      <div className="flex items-center justify-center h-screen">
-        <Loader className="size-10 animate-spin" />
+      <div data-theme={theme} className="flex h-[100dvh] items-center justify-center">
+        <Loader className="size-8 text-base-content/75 motion-safe:animate-spin" aria-label="Loading" />
       </div>
     );
 
@@ -43,7 +43,19 @@ const App = () => {
         <Route path="/profile" element={authUser ? <ProfilePage /> : <Navigate to="/login" />} />
       </Routes>
 
-      <Toaster />
+      <Toaster
+        toastOptions={{
+          // Inline styles, because react-hot-toast's own inline white background would beat classes.
+          // The CSS variables resolve against the data-theme wrapper above.
+          style: {
+            background: "oklch(var(--b1))",
+            color: "oklch(var(--bc))",
+            border: "1px solid color-mix(in oklab, oklch(var(--bc)) 12%, transparent)",
+            borderRadius: "0.75rem",
+            fontSize: "14px",
+          },
+        }}
+      />
     </div>
   );
 };

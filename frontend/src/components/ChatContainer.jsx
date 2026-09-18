@@ -1,159 +1,29 @@
 import { useChatStore } from "../store/useChatStore";
 import { useEffect, useRef, useState } from "react";
-import { Trash2, X, Edit2, Check, CheckCheck, Loader2, Ban, Smile, Reply } from "lucide-react";
+import { X, Check, Loader2 } from "lucide-react";
+import { useReducedMotion } from "motion/react";
+import * as m from "motion/react-m";
 
 import ChatHeader from "./ChatHeader";
 import MessageInput from "./MessageInput";
 import MessageSkeleton from "./skeletons/MessageSkeleton";
 import { useAuthStore } from "../store/useAuthStore";
-import { formatMessageTime } from "../lib/utils";
 import ForwardMessageModal from "./ForwardMessageModal";
-import DoubleForwardIcon from "./DoubleForwardIcon";
-
-const SwipeableBubble = ({ children, isMine, onReply, onLongPress }) => {
-  const [offsetX, setOffsetX] = useState(0);
-  const startXRef = useRef(0);
-  const isDraggingRef = useRef(false);
-  const longPressTimerRef = useRef(null);
-
-  const clearLongPress = () => {
-    if (longPressTimerRef.current) {
-      clearTimeout(longPressTimerRef.current);
-      longPressTimerRef.current = null;
-    }
-  };
-
-  const handleTouchStart = (e) => {
-    isDraggingRef.current = true;
-    startXRef.current = e.touches[0].clientX;
-    longPressTimerRef.current = setTimeout(() => {
-      if (onLongPress) onLongPress();
-    }, 500); // 500ms hold triggers long press
-  };
-
-  const handleTouchMove = (e) => {
-    if (!isDraggingRef.current) return;
-    const currentX = e.touches[0].clientX;
-    let diff = currentX - startXRef.current;
-
-    if (Math.abs(diff) > 10) {
-      clearLongPress();
-    }
-
-    // isMine: swipe left (negative diff)
-    // not mine: swipe right (positive diff)
-    if (isMine) {
-      if (diff > 0) diff = 0;
-      if (diff < -80) diff = -80;
-    } else {
-      if (diff < 0) diff = 0;
-      if (diff > 80) diff = 80;
-    }
-    
-    // add some friction
-    setOffsetX(diff * 0.5);
-  };
-
-  const handleTouchEnd = () => {
-    clearLongPress();
-    if (!isDraggingRef.current) return;
-    isDraggingRef.current = false;
-    if (Math.abs(offsetX) > 25) { // Threshold
-      onReply();
-    }
-    setOffsetX(0);
-  };
-
-  const handleMouseDown = (e) => {
-    isDraggingRef.current = true;
-    startXRef.current = e.clientX;
-    longPressTimerRef.current = setTimeout(() => {
-      if (onLongPress) onLongPress();
-    }, 500);
-  };
-
-  const handleMouseMove = (e) => {
-    if (!isDraggingRef.current) return;
-    const currentX = e.clientX;
-    let diff = currentX - startXRef.current;
-
-    if (Math.abs(diff) > 10) {
-      clearLongPress();
-    }
-
-    if (isMine) {
-      if (diff > 0) diff = 0;
-      if (diff < -80) diff = -80;
-    } else {
-      if (diff < 0) diff = 0;
-      if (diff > 80) diff = 80;
-    }
-    setOffsetX(diff * 0.5);
-  };
-
-  const handleMouseUp = () => {
-    clearLongPress();
-    if (!isDraggingRef.current) return;
-    isDraggingRef.current = false;
-    if (Math.abs(offsetX) > 25) {
-      onReply();
-    }
-    setOffsetX(0);
-  };
-
-  const handleMouseLeave = () => {
-    clearLongPress();
-    if (isDraggingRef.current) {
-      handleMouseUp();
-    }
-  };
-
-  return (
-    <div 
-      className="relative flex items-center w-full"
-      style={{ justifyContent: isMine ? 'flex-end' : 'flex-start' }}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseLeave}
-    >
-      {/* Reply Icon for incoming messages (left side) */}
-      {!isMine && (
-        <div 
-          className="absolute left-[-35px] flex items-center justify-center transition-all duration-200"
-          style={{ opacity: offsetX > 10 ? 1 : 0, transform: `scale(${offsetX > 20 ? 1 : 0.5})` }}
-        >
-          <div className="bg-base-300 rounded-full p-1.5 shadow">
-            <Reply className="size-4 text-emerald-500" />
-          </div>
-        </div>
-      )}
-
-      {/* Bubble Container */}
-      <div 
-        style={{ transform: `translateX(${offsetX}px)` }}
-        className={`chat-bubble flex flex-col relative overflow-visible ${!isDraggingRef.current ? "transition-transform duration-300 ease-out" : "transition-none"}`}
-      >
-        {children}
-      </div>
-
-      {/* Reply Icon for outgoing messages (right side) */}
-      {isMine && (
-        <div 
-          className="absolute right-[-35px] flex items-center justify-center transition-all duration-200"
-          style={{ opacity: offsetX < -10 ? 1 : 0, transform: `scale(${offsetX < -20 ? 1 : 0.5})` }}
-        >
-          <div className="bg-base-300 rounded-full p-1.5 shadow">
-            <Reply className="size-4 text-emerald-500" />
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
+import Avatar from "./Avatar";
+import ImageLightbox from "./ImageLightbox";
+import SwipeableBubble from "./chat/SwipeableBubble";
+import MessageActions from "./chat/MessageActions";
+import { useArrivingMessageIds } from "./chat/useArrivingMessageIds";
+import { ENTER_TRANSITION } from "../lib/motionTransitions";
+import {
+  DeletedNotice,
+  ForwardedLabel,
+  LinkPreviewCard,
+  MessageImage,
+  MessageMeta,
+  ReactionChips,
+  ReplyQuote,
+} from "./chat/MessageParts";
 
 const ChatContainer = () => {
   const {
@@ -178,7 +48,6 @@ const ChatContainer = () => {
   const [selectedImage, setSelectedImage] = useState(null);
   const [editingMessageId, setEditingMessageId] = useState(null);
   const [editText, setEditText] = useState("");
-  const EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 
   const [previousScrollHeight, setPreviousScrollHeight] = useState(0);
   const scrollRef = useRef(null);
@@ -190,6 +59,10 @@ const ChatContainer = () => {
 
     return () => unsubscribeFromMessages();
   }, [selectedUser._id, getMessages, subscribeToMessages, unsubscribeFromMessages]);
+
+  // Must stay below the getMessages effect above (see the hook's comment)
+  const arrivingMessageIds = useArrivingMessageIds(messages, selectedUser._id, isMessagesLoading);
+  const prefersReducedMotion = useReducedMotion();
 
   useEffect(() => {
     // Only auto-scroll to bottom on initial load (page 1)
@@ -222,7 +95,7 @@ const ChatContainer = () => {
 
   if (isMessagesLoading && page === 1) {
     return (
-      <div className="flex-1 flex flex-col overflow-auto">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <ChatHeader />
         <MessageSkeleton />
         <MessageInput />
@@ -249,287 +122,211 @@ const ChatContainer = () => {
   };
 
   return (
-    <div className="flex-1 flex flex-col overflow-auto relative">
+    <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
       <ChatHeader />
 
-      <div className="flex-1 relative overflow-hidden">
-        {/* Fixed Background Layer */}
-        <div 
-          className="absolute inset-0 z-0"
-          style={{ 
-            backgroundImage: "url('/doodle-bg.png')", 
-            backgroundRepeat: "repeat",
-            backgroundSize: "400px",
-          }}
-        >
-          <div className="absolute inset-0 bg-base-100/50 mix-blend-overlay"></div>
-        </div>
-
-        {/* Scrollable Content */}
-        <div 
-          className="absolute inset-0 overflow-y-auto overflow-x-hidden p-4 space-y-4 z-10"
+      {/* Dot grid lives on the non-scrolling layer so it stays put while messages scroll */}
+      <div className="bg-dot-grid relative min-h-0 flex-1 text-base-content">
+        <div
+          className="absolute inset-0 overflow-y-auto overflow-x-hidden px-3 pb-4 pt-10 sm:px-6"
           ref={scrollRef}
           onScroll={handleScroll}
         >
           {isMessagesLoading && page > 1 && (
-            <div className="flex justify-center my-4 relative z-20">
-              <Loader2 className="size-6 animate-spin text-primary" />
+            <div className="my-2 flex justify-center">
+              <Loader2 className="size-5 text-base-content/60 motion-safe:animate-spin" aria-label="Loading older messages" />
             </div>
           )}
 
           {filteredMessages.length === 0 && searchQuery && (
-            <div className="text-center text-zinc-500 mt-4 relative z-20">
-            No messages match &quot;{searchQuery}&quot;
-          </div>
-        )}
+            <div className="mx-auto mt-4 w-fit max-w-full truncate rounded-full border border-base-content/10 bg-base-100 px-4 py-1.5 text-[13px] text-base-content/75">
+              No messages match &quot;{searchQuery}&quot;
+            </div>
+          )}
 
-        {filteredMessages.map((message) => {
-          const senderProfile = getSenderProfile(message.senderId);
-          const isMine = message.senderId === authUser._id;
-          
-          return (
-            <div
-              key={message._id}
-              className={`chat ${isMine ? "chat-end" : "chat-start"} group relative z-10`}
-              ref={messageEndRef}
-            >
-              <div className="chat-image avatar">
-                <div className="size-10 rounded-full border">
-                  <img
-                    src={senderProfile.profilePic || "/avatar.png"}
-                    alt="profile pic"
-                  />
-                </div>
-              </div>
+          {filteredMessages.map((message, index) => {
+            const senderProfile = getSenderProfile(message.senderId);
+            const isMine = message.senderId === authUser._id;
+            const isFirstOfRun = index === 0 || filteredMessages[index - 1].senderId !== message.senderId;
+            const showsAvatarColumn = selectedUser.isGroup && !isMine;
+            const isEditing = editingMessageId === message._id;
 
-              {selectedUser.isGroup && !isMine && (
-                <div className="chat-header text-xs opacity-70 mb-1 ml-1 font-medium">
-                  {senderProfile.fullName}
-                </div>
-              )}
+            // The corner nearest the sender's side is tightened on the first bubble of a run
+            let bubbleClassName;
+            if (message.isDeletedForEveryone) {
+              bubbleClassName = "border border-base-content/15 bg-base-100 text-base-content";
+            } else if (isMine) {
+              bubbleClassName = "bg-primary text-primary-content";
+            } else {
+              bubbleClassName = "bg-base-200 text-base-content";
+            }
+            const cornerClassName = isFirstOfRun ? (isMine ? "rounded-tr-md" : "rounded-tl-md") : "";
 
-              <div className="chat-header mb-1 flex justify-end gap-2 h-5">
-                <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
-                  
-                  <button onClick={() => setReplyingTo(message)} className="text-zinc-500 hover:text-emerald-500 p-1 hidden sm:block">
-                    <Reply className="size-4" />
-                  </button>
-
-                  <button onClick={() => setMessageToForward(message)} className="text-zinc-500 hover:text-emerald-500 p-1 hidden sm:flex items-center">
-                    <DoubleForwardIcon className="size-4" />
-                  </button>
-
-                  {isMine && message.text && !message.isDeletedForEveryone && (
-                    <button
-                      onClick={() => {
-                        setEditingMessageId(message._id);
-                        setEditText(message.text);
-                      }}
-                      className="text-zinc-500 hover:text-emerald-500 p-1"
-                    >
-                      <Edit2 className="size-4" />
-                    </button>
-                  )}
-                  
-                  <div className={`dropdown ${isMine ? "dropdown-end" : ""}`}>
-                    <div tabIndex={0} role="button" className="text-error hover:text-red-600 flex items-center justify-center p-1">
-                      <Trash2 className="size-4" />
-                    </div>
-                    <ul tabIndex={0} className="dropdown-content z-50 menu p-2 shadow bg-base-300 rounded-box w-48 ml-1">
-                      <li>
-                        <button onClick={() => { deleteMessage(message._id, "me"); document.activeElement.blur(); }} className="text-sm">
-                          Delete for me
-                        </button>
-                      </li>
-                      {isMine && !message.isDeletedForEveryone && (
-                        <li>
-                          <button onClick={() => { deleteMessage(message._id, "everyone"); document.activeElement.blur(); }} className="text-error text-sm">
-                            Delete for everyone
-                          </button>
-                        </li>
-                      )}
-                    </ul>
-                  </div>
-
-                  {!message.isDeletedForEveryone && (
-                    <div className={`dropdown ${isMine ? "dropdown-end" : ""}`}>
-                      <div tabIndex={0} role="button" className="text-zinc-500 hover:text-emerald-500 flex items-center justify-center p-1">
-                        <Smile className="size-4" />
-                      </div>
-                      <ul tabIndex={0} className="dropdown-content z-50 flex flex-row gap-1 p-2 shadow bg-base-300 rounded-box -top-10">
-                        {EMOJIS.map(emoji => (
-                          <li key={emoji}>
-                            <button 
-                              onClick={() => { reactToMessage(message._id, emoji); document.activeElement.blur(); }}
-                              className="hover:scale-125 transition-transform text-lg"
-                            >
-                              {emoji}
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              </div>
-              
-              <SwipeableBubble isMine={isMine} onReply={() => setReplyingTo(message)} onLongPress={() => setMessageToForward(message)}>
-                {/* Threaded Reply Block */}
-                {message.replyTo && (
-                  <div 
-                    className="mb-2 p-2 bg-base-300/50 rounded border-l-4 border-primary text-xs opacity-90 hover:opacity-100 transition-opacity"
-                    style={{ pointerEvents: 'none' }} // Prevent dragging conflicts when clicking inside
-                  >
-                    <div className="font-semibold text-primary mb-1">
-                      {message.replyTo.senderId === authUser._id ? 'You' : getSenderProfile(message.replyTo.senderId).fullName}
-                    </div>
-                    <div className="truncate max-w-[150px] sm:max-w-[250px]">
-                      {message.replyTo.text || (message.replyTo.image ? "📷 Photo" : message.replyTo.audio ? "🎤 Voice Note" : "Message")}
-                    </div>
+            return (
+              <m.div
+                key={message._id}
+                ref={messageEndRef}
+                className={`group/message ${isFirstOfRun ? "mt-4 first:mt-0" : "mt-1"}`}
+                // Only live arrivals rise in; initial and prepended messages mount in place.
+                // The swipe gesture moves the inner bubble, so this outer transform never fights it.
+                initial={!prefersReducedMotion && arrivingMessageIds.has(message._id) ? { opacity: 0, y: 8 } : false}
+                animate={{ opacity: 1, y: 0 }}
+                transition={ENTER_TRANSITION}
+              >
+                {selectedUser.isGroup && !isMine && isFirstOfRun && (
+                  <div className="mb-1 truncate pl-10 text-[13px] font-medium text-base-content/75">
+                    {senderProfile.fullName}
                   </div>
                 )}
 
-                {message.isDeletedForEveryone ? (
-                  <div className="italic text-zinc-400 flex items-center gap-2 py-1">
-                    <Ban className="size-4" /> 
-                    <span className="text-sm">This message was deleted</span>
-                  </div>
-                ) : (
-                  <>
-                    {message.isForwarded && (
-                      <div className="text-[10px] text-zinc-400/80 italic mb-1 flex items-center font-medium pointer-events-none gap-1">
-                        <DoubleForwardIcon className="size-3" />
-                        Forwarded
-                      </div>
-                    )}
-                    {message.image && (
-                      <img
-                        src={message.image}
-                        alt="Attachment"
-                        className="sm:max-w-[200px] rounded-md mb-2 hover:opacity-80 transition-opacity"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedImage(message.image);
+                <div className={`flex gap-2 ${isMine ? "justify-end" : "justify-start"}`}>
+                  {showsAvatarColumn &&
+                    (isFirstOfRun ? (
+                      <Avatar src={senderProfile.profilePic} className="size-8" dotClassName="size-2.5" />
+                    ) : (
+                      <span className="w-8 shrink-0" aria-hidden="true" />
+                    ))}
+
+                  <div className={`flex min-w-0 max-w-[75%] flex-col sm:max-w-[65%] ${isMine ? "items-end" : "items-start"}`}>
+                    <div className="relative max-w-full">
+                      <SwipeableBubble
+                        isMine={isMine}
+                        onReply={() => setReplyingTo(message)}
+                        onLongPress={() => setMessageToForward(message)}
+                        className={`rounded-2xl px-3 py-2 ${cornerClassName} ${bubbleClassName}`}
+                      >
+                        {/* Threaded reply block */}
+                        {message.replyTo && (
+                          <ReplyQuote
+                            replyTo={message.replyTo}
+                            isMine={isMine && !message.isDeletedForEveryone}
+                            senderName={
+                              message.replyTo.senderId === authUser._id
+                                ? "You"
+                                : getSenderProfile(message.replyTo.senderId).fullName
+                            }
+                          />
+                        )}
+
+                        {message.isDeletedForEveryone ? (
+                          <div className="flex flex-wrap items-end gap-x-3">
+                            <DeletedNotice />
+                            <MessageMeta message={message} isMine={isMine} />
+                          </div>
+                        ) : (
+                          <>
+                            {message.isForwarded && <ForwardedLabel isMine={isMine} />}
+
+                            {message.image && (
+                              <MessageImage
+                                src={message.image}
+                                onOpen={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedImage(message.image);
+                                }}
+                              />
+                            )}
+
+                            {message.audio && (
+                              <audio
+                                src={message.audio}
+                                controls
+                                className="mb-1.5 h-10 w-52 max-w-full sm:w-64"
+                                onMouseDown={(e) => e.stopPropagation()}
+                                onTouchStart={(e) => e.stopPropagation()}
+                              />
+                            )}
+
+                            {message.linkPreview && (
+                              <LinkPreviewCard linkPreview={message.linkPreview} />
+                            )}
+
+                            {isEditing ? (
+                              <form
+                                onSubmit={(e) => handleEditSubmit(e, message._id)}
+                                className="flex w-[min(18rem,60vw)] items-center gap-1.5 py-0.5"
+                                onMouseDown={(e) => e.stopPropagation()}
+                                onTouchStart={(e) => e.stopPropagation()}
+                              >
+                                <input
+                                  type="text"
+                                  value={editText}
+                                  onChange={(e) => setEditText(e.target.value)}
+                                  aria-label="Edit message"
+                                  className="input input-sm h-8 min-w-0 flex-1 rounded-lg border-transparent bg-base-100 text-[15px] text-base-content focus:border-transparent focus:outline-none focus:ring-2 focus:ring-primary-content/60"
+                                  autoFocus
+                                />
+                                <button
+                                  type="submit"
+                                  aria-label="Save edit"
+                                  title="Save edit"
+                                  className="btn btn-circle btn-sm min-h-0 border-0 bg-primary-content text-primary hover:bg-primary-content/90"
+                                >
+                                  <Check className="size-4" aria-hidden="true" />
+                                </button>
+                                <button
+                                  type="button"
+                                  aria-label="Cancel edit"
+                                  title="Cancel edit"
+                                  onClick={() => setEditingMessageId(null)}
+                                  className="btn btn-circle btn-ghost btn-sm min-h-0 text-primary-content hover:bg-primary-content/15"
+                                >
+                                  <X className="size-4" aria-hidden="true" />
+                                </button>
+                              </form>
+                            ) : (
+                              <div className="flex flex-wrap items-end gap-x-3">
+                                {message.text && (
+                                  <p className="pointer-events-none min-w-0 whitespace-pre-wrap text-[15px] leading-snug [overflow-wrap:anywhere]">
+                                    {message.text}
+                                  </p>
+                                )}
+                                <MessageMeta message={message} isMine={isMine} />
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </SwipeableBubble>
+
+                      <MessageActions
+                        message={message}
+                        isMine={isMine}
+                        onReply={() => setReplyingTo(message)}
+                        onForward={() => setMessageToForward(message)}
+                        onEdit={() => {
+                          setEditingMessageId(message._id);
+                          setEditText(message.text);
                         }}
+                        onDelete={(type) => deleteMessage(message._id, type)}
+                        onReact={(emoji) => reactToMessage(message._id, emoji)}
+                        reactionMenuOpensDown={index === 0}
+                        deleteMenuOpensUp={index >= 2 && index >= filteredMessages.length - 2}
+                      />
+                    </div>
+
+                    {message.reactions && message.reactions.length > 0 && (
+                      <ReactionChips
+                        reactions={message.reactions}
+                        onReact={(emoji) => reactToMessage(message._id, emoji)}
                       />
                     )}
-                    {message.audio && (
-                      <audio src={message.audio} controls className="h-10 mb-2 w-48 sm:w-64" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()} />
-                    )}
-                    {message.linkPreview && (
-                      <a href={message.linkPreview.url} target="_blank" rel="noopener noreferrer" className="block max-w-[200px] sm:max-w-xs border border-zinc-700 rounded-lg overflow-hidden mb-2 hover:opacity-90 bg-base-300 transition-colors" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
-                        {message.linkPreview.image && <img src={message.linkPreview.image} alt="Preview" className="w-full h-32 object-cover bg-zinc-800" />}
-                        <div className="p-3">
-                          <h4 className="font-semibold text-sm truncate">{message.linkPreview.title}</h4>
-                          {message.linkPreview.description && <p className="text-xs text-zinc-400 line-clamp-2 mt-1">{message.linkPreview.description}</p>}
-                        </div>
-                      </a>
-                    )}
-                    {editingMessageId === message._id ? (
-                      <form 
-                        onSubmit={(e) => handleEditSubmit(e, message._id)}
-                        className="flex items-center gap-2 mt-1"
-                        onMouseDown={(e) => e.stopPropagation()} 
-                        onTouchStart={(e) => e.stopPropagation()}
-                      >
-                        <input 
-                          type="text" 
-                          value={editText}
-                          onChange={(e) => setEditText(e.target.value)}
-                          className="input input-sm input-bordered w-full text-base-content bg-base-100"
-                          autoFocus
-                        />
-                        <button type="submit" className="btn btn-sm btn-circle btn-success btn-outline">
-                          <Check className="size-4" />
-                        </button>
-                        <button 
-                          type="button" 
-                          onClick={() => setEditingMessageId(null)}
-                          className="btn btn-sm btn-circle btn-error btn-outline"
-                        >
-                          <X className="size-4" />
-                        </button>
-                      </form>
-                    ) : (
-                      message.text && <p className="mb-1 pointer-events-none">{message.text}</p>
-                    )}
-                  </>
-                )}
-
-                {message.reactions && message.reactions.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-1 z-10 relative">
-                    {Object.entries(
-                      message.reactions.reduce((acc, r) => {
-                        acc[r.emoji] = (acc[r.emoji] || 0) + 1;
-                        return acc;
-                      }, {})
-                    ).map(([emoji, count]) => (
-                      <button
-                        key={emoji}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          reactToMessage(message._id, emoji);
-                        }}
-                        onMouseDown={(e) => e.stopPropagation()} 
-                        onTouchStart={(e) => e.stopPropagation()}
-                        className="text-xs bg-base-300 border border-zinc-700 rounded-full px-2 py-0.5 flex items-center gap-1 hover:bg-base-200 transition-colors shadow-sm"
-                      >
-                        <span>{emoji}</span>
-                        {count > 1 && <span className="text-[10px] text-zinc-400">{count}</span>}
-                      </button>
-                    ))}
                   </div>
-                )}
-
-                {/* Timestamp and Ticks */}
-                <div className="flex items-center justify-end gap-1 text-[10px] opacity-70 mt-1 self-end ml-4 pointer-events-none">
-                  <time>
-                    {formatMessageTime(message.createdAt)}
-                    {message.isEdited && <span className="italic ml-1">(edited)</span>}
-                  </time>
-                  {isMine && (
-                    <div className="flex items-center ml-1">
-                      {message.status === "read" ? (
-                        <CheckCheck className="size-4 text-blue-400" />
-                      ) : message.status === "delivered" ? (
-                        <CheckCheck className="size-4 text-base-content/70" />
-                      ) : (
-                        <Check className="size-4 text-base-content/70" />
-                      )}
-                    </div>
-                  )}
                 </div>
-              </SwipeableBubble>
-            </div>
-          );
-        })}
+              </m.div>
+            );
+          })}
         </div>
       </div>
 
       <MessageInput />
 
-      {/* Full Screen Image Modal */}
-      {selectedImage && (
-        <div 
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
-          onClick={() => setSelectedImage(null)}
-        >
-          <div className="relative max-w-5xl w-full flex items-center justify-center h-full">
-            <button 
-              className="absolute top-4 right-4 p-2 bg-base-100 rounded-full hover:bg-base-200 transition-colors"
-              onClick={() => setSelectedImage(null)}
-            >
-              <X className="size-6" />
-            </button>
-            <img 
-              src={selectedImage} 
-              alt="Full screen attachment" 
-              className="max-h-full max-w-full object-contain rounded-lg shadow-2xl"
-              onClick={(e) => e.stopPropagation()} 
-            />
-          </div>
-        </div>
-      )}
+      {/* Full screen image viewer */}
+      <ImageLightbox
+        isOpen={Boolean(selectedImage)}
+        src={selectedImage}
+        alt="Full screen attachment"
+        onClose={() => setSelectedImage(null)}
+      />
       <ForwardMessageModal />
     </div>
   );
