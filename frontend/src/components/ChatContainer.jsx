@@ -1,5 +1,5 @@
 import { useChatStore } from "../store/useChatStore";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { X, Check, Loader2 } from "lucide-react";
 import { useReducedMotion } from "motion/react";
 import * as m from "motion/react-m";
@@ -29,17 +29,17 @@ const ChatContainer = () => {
   const {
     messages,
     users,
+    allUsers,
     getMessages,
     isMessagesLoading,
+    isLoadingOlderMessages,
     selectedUser,
-    subscribeToMessages,
-    unsubscribeFromMessages,
     deleteMessage,
     editMessage,
     reactToMessage,
     searchQuery,
     hasMore,
-    page,
+    loadedPageCount,
     setReplyingTo,
     setMessageToForward,
   } = useChatStore();
@@ -49,51 +49,76 @@ const ChatContainer = () => {
   const [editingMessageId, setEditingMessageId] = useState(null);
   const [editText, setEditText] = useState("");
 
-  const [previousScrollHeight, setPreviousScrollHeight] = useState(0);
   const scrollRef = useRef(null);
+  // Set when an older page is requested: the message at the top of the view, how far it sat
+  // from the top, and which message was oldest then. Cleared once that page is in place.
+  const scrollAnchorRef = useRef(null);
 
+  // The socket listeners are registered for the whole session in useAuthStore.connectSocket,
+  // so this only loads the newest page of the chat being opened.
   useEffect(() => {
     getMessages(selectedUser._id);
-
-    subscribeToMessages();
-
-    return () => unsubscribeFromMessages();
-  }, [selectedUser._id, getMessages, subscribeToMessages, unsubscribeFromMessages]);
+  }, [selectedUser._id, getMessages]);
 
   // Must stay below the getMessages effect above (see the hook's comment)
   const arrivingMessageIds = useArrivingMessageIds(messages, selectedUser._id, isMessagesLoading);
   const prefersReducedMotion = useReducedMotion();
 
   useEffect(() => {
-    // Only auto-scroll to bottom on initial load (page 1)
-    if (messageEndRef.current && messages && page === 1) {
+    // Only auto-scroll to bottom while the newest page is all that is loaded
+    if (messageEndRef.current && messages && loadedPageCount === 1) {
       setTimeout(() => {
         messageEndRef.current?.scrollIntoView({ behavior: "smooth" });
       }, 50);
     }
-  }, [messages, page]);
+  }, [messages, loadedPageCount]);
 
-  // Handle scroll position preservation when prepending older messages
-  useEffect(() => {
-    if (scrollRef.current && page > 1) {
-      const currentScrollHeight = scrollRef.current.scrollHeight;
-      const heightDifference = currentScrollHeight - previousScrollHeight;
-      scrollRef.current.scrollTop = heightDifference;
+  // Keeps the reader's place when an older page is prepended: the message that was at the top
+  // of the view is put back at the same distance from the top. A layout effect, so the page
+  // never paints at the wrong position. It acts once per page, so later arrivals, edits and
+  // reactions leave the scroll position alone.
+  useLayoutEffect(() => {
+    const anchor = scrollAnchorRef.current;
+    const container = scrollRef.current;
+    if (!anchor || !container) return;
+
+    // While only the spinner has appeared nothing is prepended yet, and the spinner stays in view
+    const hasPrepended = messages[0]?._id !== anchor.oldestMessageId;
+    if (hasPrepended) {
+      const anchorElement = container.querySelector(`[data-message-id="${anchor.messageId}"]`);
+      if (anchorElement) {
+        const offsetFromTop = anchorElement.getBoundingClientRect().top - container.getBoundingClientRect().top;
+        container.scrollTop += offsetFromTop - anchor.offsetFromTop;
+      }
     }
-  }, [messages, page, previousScrollHeight]);
+
+    // The spinner can leave in a later render than the page arrives, so the anchor is
+    // applied again then, and dropped only once loading is over
+    if (!isLoadingOlderMessages) scrollAnchorRef.current = null;
+  }, [messages, isLoadingOlderMessages]);
 
   const handleScroll = () => {
-    if (scrollRef.current) {
-      const { scrollTop, scrollHeight } = scrollRef.current;
-      // Fetch more if scrolled to top, there are more messages, and not currently loading
-      if (scrollTop === 0 && hasMore && !isMessagesLoading) {
-        setPreviousScrollHeight(scrollHeight);
-        getMessages(selectedUser._id, page + 1);
-      }
+    const container = scrollRef.current;
+    if (!container) return;
+
+    // Fetch more if scrolled to top, there are more messages, and not currently loading
+    if (container.scrollTop === 0 && hasMore && !isMessagesLoading && !isLoadingOlderMessages && messages.length > 0) {
+      // The first rendered message, which is not messages[0] while a search filters the list
+      const topMessageElement = container.querySelector("[data-message-id]");
+      scrollAnchorRef.current = topMessageElement
+        ? {
+            messageId: topMessageElement.dataset.messageId,
+            offsetFromTop: topMessageElement.getBoundingClientRect().top - container.getBoundingClientRect().top,
+            oldestMessageId: messages[0]._id,
+          }
+        : null;
+
+      // The oldest message held is the cursor for the page before it
+      getMessages(selectedUser._id, messages[0]._id);
     }
   };
 
-  if (isMessagesLoading && page === 1) {
+  if (isMessagesLoading) {
     return (
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <ChatHeader />
@@ -116,9 +141,21 @@ const ChatContainer = () => {
     }
   };
 
+  // In a group the sender often has no DM history, so `users` alone cannot name them. The
+  // group's own members carry the public profile of everyone in it, then DM partners, then
+  // everyone else with an account. Unknown is left for a sender found in none of them.
   const getSenderProfile = (id) => {
     if (id === authUser._id) return authUser;
-    return users.find(u => u._id === id) || { fullName: "Unknown", profilePic: "/avatar.png" };
+
+    const groupMember = selectedUser.isGroup
+      ? selectedUser.members?.find((member) => member._id === id)
+      : null;
+
+    return (
+      groupMember ||
+      users.find((u) => u._id === id) ||
+      allUsers.find((u) => u._id === id) || { fullName: "Unknown", profilePic: "/avatar.png" }
+    );
   };
 
   return (
@@ -132,7 +169,7 @@ const ChatContainer = () => {
           ref={scrollRef}
           onScroll={handleScroll}
         >
-          {isMessagesLoading && page > 1 && (
+          {isLoadingOlderMessages && (
             <div className="my-2 flex justify-center">
               <Loader2 className="size-5 text-base-content/60 motion-safe:animate-spin" aria-label="Loading older messages" />
             </div>
@@ -165,6 +202,7 @@ const ChatContainer = () => {
             return (
               <m.div
                 key={message._id}
+                data-message-id={message._id}
                 ref={messageEndRef}
                 className={`group/message ${isFirstOfRun ? "mt-4 first:mt-0" : "mt-1"}`}
                 // Only live arrivals rise in; initial and prepended messages mount in place.
@@ -195,11 +233,13 @@ const ChatContainer = () => {
                         onLongPress={() => setMessageToForward(message)}
                         className={`rounded-2xl px-3 py-2 ${cornerClassName} ${bubbleClassName}`}
                       >
-                        {/* Threaded reply block */}
-                        {message.replyTo && (
+                        {/* Threaded reply block. The server keeps replyTo on a message deleted
+                            for everyone, so the quote is hidden here as well as dropped from
+                            the local copy, and a reload looks the same as the live update. */}
+                        {message.replyTo && !message.isDeletedForEveryone && (
                           <ReplyQuote
                             replyTo={message.replyTo}
-                            isMine={isMine && !message.isDeletedForEveryone}
+                            isMine={isMine}
                             senderName={
                               message.replyTo.senderId === authUser._id
                                 ? "You"

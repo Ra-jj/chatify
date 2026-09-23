@@ -11,6 +11,19 @@ const ForwardMessageModal = () => {
   const [search, setSearch] = useState("");
   const [selectedIds, setSelectedIds] = useState([]);
 
+  // The dialog stays mounted between messages, so each opening starts from a clean sheet
+  // instead of the recipients and search text of the last forward. Reset during render (React's
+  // pattern for adjusting state to a changed value) so the old ticks never paint, not even for
+  // the one frame an effect would leave them on screen.
+  const [openedForMessage, setOpenedForMessage] = useState(messageToForward);
+  if (openedForMessage !== messageToForward) {
+    setOpenedForMessage(messageToForward);
+    if (messageToForward) {
+      setSelectedIds([]);
+      setSearch("");
+    }
+  }
+
   const combinedList = [
     ...allUsers.map(u => ({ ...u, isGroup: false })),
     ...groups.map(g => ({ ...g, isGroup: true, fullName: g.name, profilePic: g.groupImage }))

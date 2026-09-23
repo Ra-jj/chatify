@@ -23,8 +23,12 @@ const MessageInput = () => {
   const [audioUrl, setAudioUrl] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [isSending, setIsSending] = useState(false);
 
   const fileInputRef = useRef(null);
+  // The state above disables the button; this ref is the guard itself, because a second
+  // submit can fire before the render that disables the button
+  const isSendingRef = useRef(false);
   const typingTimeoutRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -126,6 +130,8 @@ const MessageInput = () => {
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
+    // A double-click or a second Enter while the first send is in flight would post it twice
+    if (isSendingRef.current) return;
     if (!text.trim() && !imagePreview && !audioUrl) return;
 
     // Clear typing timeout when sending
@@ -136,25 +142,38 @@ const MessageInput = () => {
       socket.emit("stopTyping", { receiverId: selectedUser._id });
     }
 
+    // What this send carries. Anything typed or attached while it is in flight stays behind.
+    const sentText = text;
+    const sentImage = imagePreview;
+    const sentAudio = audioUrl;
+
+    isSendingRef.current = true;
+    setIsSending(true);
     try {
-      await sendMessage({
-        text: text.trim(),
-        image: imagePreview,
-        audio: audioUrl,
+      const wasSent = await sendMessage({
+        text: sentText.trim(),
+        image: sentImage,
+        audio: sentAudio,
       });
 
-      // Clear form
-      setText("");
-      setImagePreview(null);
-      setAudioUrl(null);
+      // A send that failed keeps the text, the image and the recording so it can be retried;
+      // the store has already shown the error.
+      if (!wasSent) return;
+
+      // Clear only what went out: keep characters typed during the send, and an attachment
+      // picked during it.
+      setText((current) => (current.startsWith(sentText) ? current.slice(sentText.length) : current));
+      setImagePreview((current) => (current === sentImage ? null : current));
+      setAudioUrl((current) => (current === sentAudio ? null : current));
       setShowEmojiPicker(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
-    } catch (error) {
-      console.error("Failed to send message:", error);
+    } finally {
+      isSendingRef.current = false;
+      setIsSending(false);
     }
   };
 
-  const isSendDisabled = (!text.trim() && !imagePreview && !audioUrl) || isRecording;
+  const isSendDisabled = (!text.trim() && !imagePreview && !audioUrl) || isRecording || isSending;
   const hasAttachmentRow = imagePreview || audioUrl;
 
   return (
