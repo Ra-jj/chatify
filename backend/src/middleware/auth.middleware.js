@@ -25,7 +25,6 @@ export const protectRoute = async (req, res, next) => {
     }
 
     if (user.sessionId !== decoded.sessionId) {
-      res.cookie("jwt", "", { maxAge: 0 });
       return res.status(401).json({ message: "Unauthorized - Logged in from another device" });
     }
 
@@ -35,7 +34,6 @@ export const protectRoute = async (req, res, next) => {
   } catch (error) {
     // jwt.verify throws these for malformed, forged, expired or not-yet-valid tokens
     if (JWT_VERIFY_ERROR_NAMES.has(error.name)) {
-      res.cookie("jwt", "", { maxAge: 0 });
       return res.status(401).json({ message: "Unauthorized - Invalid Token" });
     }
 

@@ -18,6 +18,8 @@ webpush.setVapidDetails(
 
 const MAX_MESSAGE_TEXT_LENGTH = 5000;
 const MAX_MESSAGES_PAGE_SIZE = 100;
+// An ISO date such as 2026-09-18, optionally followed by a time such as T05:27:15.709Z
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}(T[\d:.]+(Z|[+-]\d{2}:\d{2})?)?$/;
 const MAX_PUSH_SUBSCRIPTIONS_PER_USER = 5;
 const MAX_PUSH_ENDPOINT_LENGTH = 2048;
 const MAX_PUSH_KEY_LENGTH = 512;
@@ -192,44 +194,87 @@ export const getAllUsers = async (req, res) => {
   }
 };
 
+// Cursor pagination. `before` is the oldest message the client already holds, given as its
+// _id (preferred) or as an ISO date. Offset paging returned a message twice whenever one was
+// sent between two page requests, because a new message shifts every older row down by one.
+// Ties on createdAt are broken by _id, so the cursor names exactly one position in the order.
+const buildBeforeFilter = async (before, conversationFilter) => {
+  if (isValidObjectId(before)) {
+    // Looked up only inside the conversation the requester is already authorized for, so a
+    // cursor cannot be used to learn anything about a message in someone else's chat
+    const cursorMessage = await Message.findOne({ _id: before, ...conversationFilter }).select("createdAt");
+    if (!cursorMessage) {
+      return { status: 400, error: "The before cursor is not a message in this conversation" };
+    }
+
+    return {
+      filter: {
+        $or: [
+          { createdAt: { $lt: cursorMessage.createdAt } },
+          { createdAt: cursorMessage.createdAt, _id: { $lt: cursorMessage._id } },
+        ],
+      },
+    };
+  }
+
+  // Date also parses loose forms such as "5", so the ISO shape is checked first
+  const isIsoDateString = typeof before === "string" && ISO_DATE_PATTERN.test(before);
+  const cursorDate = isIsoDateString ? new Date(before) : new Date(NaN);
+  if (Number.isNaN(cursorDate.getTime())) {
+    return { status: 400, error: "The before cursor must be a message id or an ISO date" };
+  }
+
+  return { filter: { createdAt: { $lt: cursorDate } } };
+};
+
 export const getMessages = async (req, res) => {
   try {
     const { id: userToChatId } = req.params;
+    const { before } = req.query;
     const myId = req.user._id;
-    const page = Math.max(parseInt(req.query.page) || 1, 1);
     const limit = Math.min(Math.max(parseInt(req.query.limit) || 50, 1), MAX_MESSAGES_PAGE_SIZE);
-    const skip = (page - 1) * limit;
 
     const target = await resolveChatTarget(userToChatId, myId);
     if (target.error) {
       return res.status(target.status).json({ error: target.error });
     }
 
-    let query = { deletedFor: { $ne: myId } };
+    const conversationFilter = target.group
+      ? { groupId: target.group._id }
+      : {
+          $or: [
+            { senderId: myId, receiverId: target.receiver._id },
+            { senderId: target.receiver._id, receiverId: myId },
+          ],
+        };
 
-    if (target.group) {
-      query.groupId = target.group._id;
-    } else {
-      query.$or = [
-        { senderId: myId, receiverId: target.receiver._id },
-        { senderId: target.receiver._id, receiverId: myId },
-      ];
+    const query = { ...conversationFilter, deletedFor: { $ne: myId } };
+
+    if (isProvided(before)) {
+      const beforeFilter = await buildBeforeFilter(before, conversationFilter);
+      if (beforeFilter.error) {
+        return res.status(beforeFilter.status).json({ error: beforeFilter.error });
+      }
+      // $and keeps this beside the conversation's own $or instead of replacing it
+      query.$and = [beforeFilter.filter];
     }
 
-    const messages = await Message.find(query)
+    // One row past the page size answers hasMore without a second count query
+    const fetched = await Message.find(query)
       .populate("replyTo", "text image audio senderId")
-      .sort({ createdAt: -1 }) // Get newest first
-      .skip(skip)
-      .limit(limit);
+      .sort({ createdAt: -1, _id: -1 }) // Newest first, so the cursor walks backwards
+      .limit(limit + 1);
+
+    const hasMore = fetched.length > limit;
+    const messages = hasMore ? fetched.slice(0, limit) : fetched;
 
     // Reverse to return in chronological order (top to bottom)
     messages.reverse();
 
-    // Check if more messages exist
-    const totalMessages = await Message.countDocuments(query);
-    const hasMore = skip + messages.length < totalMessages;
+    // The cursor to pass as `before` for the next, older page
+    const nextCursor = messages.length > 0 ? messages[0]._id : null;
 
-    res.status(200).json({ messages, hasMore, page });
+    res.status(200).json({ messages, hasMore, nextCursor });
   } catch (error) {
     console.log("Error in getMessages controller: ", error.message);
     res.status(500).json({ error: "Internal server error" });
