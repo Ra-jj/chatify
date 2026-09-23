@@ -48,6 +48,75 @@
     background-clip: content-box;
   }
 
+  /* Read-receipt blue, per theme (used by components/chat/MessageTicks.jsx).
+     --read-tick sits on the own-message bubble (bg-primary), so its lightness is tuned per theme
+     to measure >= 3.15:1 against that theme's primary: light sky blue on dark or violet bubbles,
+     deeper blue on light or blue-ish ones.
+     --read-tick-halo draws a 1px outline where no recognisable blue reaches 3:1 by itself. Only
+     "dark" needs it: against its mid-light periwinkle primary, the blues that pass are either
+     near-white or a navy that looks like the dark Delivered tick.
+     --read-tick-on-base is for the outlined bg-base-100 bubble of a message deleted for everyone. */
+  :root,
+  [data-theme="chatify"] {
+    --read-tick: #8fe3ff;
+    --read-tick-halo: transparent;
+    --read-tick-on-base: #4cc2ff;
+  }
+
+  [data-theme="dark"] {
+    --read-tick: #8fe3ff;
+    --read-tick-halo: #0b1f4d;
+    --read-tick-on-base: #4cc2ff;
+  }
+
+  [data-theme="night"] {
+    --read-tick: #0056b8;
+    --read-tick-halo: transparent;
+    --read-tick-on-base: #4cc2ff;
+  }
+
+  [data-theme="dim"] {
+    --read-tick: #006fed;
+    --read-tick-halo: transparent;
+    --read-tick-on-base: #4cc2ff;
+  }
+
+  [data-theme="business"] {
+    --read-tick: #00a6ff;
+    --read-tick-halo: transparent;
+    --read-tick-on-base: #4cc2ff;
+  }
+
+  [data-theme="luxury"] {
+    --read-tick: #0086e6;
+    --read-tick-halo: transparent;
+    --read-tick-on-base: #4cc2ff;
+  }
+
+  [data-theme="light"] {
+    --read-tick: #00b3ff;
+    --read-tick-halo: transparent;
+    --read-tick-on-base: #0369a1;
+  }
+
+  [data-theme="corporate"] {
+    --read-tick: #a6e9ff;
+    --read-tick-halo: transparent;
+    --read-tick-on-base: #0369a1;
+  }
+
+  [data-theme="nord"] {
+    --read-tick: #b5edff;
+    --read-tick-halo: transparent;
+    --read-tick-on-base: #0369a1;
+  }
+
+  [data-theme="emerald"] {
+    --read-tick: #005ac2;
+    --read-tick-halo: transparent;
+    --read-tick-on-base: #0369a1;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
@@ -75,5 +144,18 @@
      base-200 in all 10 themes (see the contrast audit in the redesign handoff). */
   .text-primary-ink {
     color: color-mix(in oklab, oklch(var(--p)) 35%, oklch(var(--bc)));
+  }
+
+  /* Read-receipt tick colours; the per-theme values live in the base layer above */
+  .text-read-tick {
+    color: var(--read-tick);
+  }
+
+  .text-read-tick-on-base {
+    color: var(--read-tick-on-base);
+  }
+
+  .stroke-read-tick-halo {
+    stroke: var(--read-tick-halo);
   }
 }

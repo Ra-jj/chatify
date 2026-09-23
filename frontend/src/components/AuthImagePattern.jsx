@@ -1,6 +1,7 @@
 import { useReducedMotion } from "motion/react";
 import * as m from "motion/react-m";
-import { CheckCheck, SendHorizontal } from "lucide-react";
+import { SendHorizontal } from "lucide-react";
+import MessageTicks from "./chat/MessageTicks";
 
 // Right half of the auth pages (lg and up): a static chat-card mockup, pure markup,
 // with a serif hero line underneath. On mount it plays once like a live conversation.
@@ -106,12 +107,12 @@ const AuthImagePattern = ({ headline, supportingText }) => {
                   >
                     <span>{message.text}</span>
                     <span
-                      className={`ml-auto flex items-center gap-0.5 text-[10.5px] leading-4 ${
+                      className={`ml-auto flex items-center gap-1 text-[10.5px] leading-4 ${
                         message.isMine ? "text-primary-content" : "text-base-content/75"
                       }`}
                     >
                       {message.time}
-                      {message.isRead && <CheckCheck className="size-3.5" strokeWidth={2.75} />}
+                      {message.isRead && <MessageTicks status="read" />}
                     </span>
                   </m.div>
                   {message.reaction && (

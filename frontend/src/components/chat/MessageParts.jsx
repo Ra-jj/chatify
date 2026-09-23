@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Ban, Check, CheckCheck, ImageOff } from "lucide-react";
+import { Ban, ImageOff } from "lucide-react";
 import DoubleForwardIcon from "../DoubleForwardIcon";
+import MessageTicks from "./MessageTicks";
 import { formatMessageTime } from "../../lib/utils";
 
 // Presentational pieces of a message bubble. Colours depend on `isMine`, because own bubbles
@@ -161,16 +162,9 @@ export const ReactionChips = ({ reactions, onReact }) => {
   );
 };
 
-// Tick states are told apart by count, colour strength AND stroke weight, never colour alone:
-// Sent = one thin tick at 70%, Delivered = two thin ticks at 70%, Read = two heavier ticks at 100%.
-// 70% is the lowest opacity that measured >= 3:1 against primary in all 10 themes.
-const READ_TICK_STROKE = 2.75;
-
 export const MessageMeta = ({ message, isMine }) => {
   // Deleted messages drop the primary fill, so their meta and ticks use base colours
   const isOnPrimary = isMine && !message.isDeletedForEveryone;
-  const fullTickClassName = isOnPrimary ? "text-primary-content" : "text-base-content";
-  const dimTickClassName = isOnPrimary ? "text-primary-content/70" : "text-base-content/60";
 
   return (
     <span
@@ -182,22 +176,7 @@ export const MessageMeta = ({ message, isMine }) => {
         {formatMessageTime(message.createdAt)}
         {message.isEdited && <span className="ml-1">(edited)</span>}
       </time>
-      {isMine && (
-        <span className="flex items-center">
-          {message.status === "read" ? (
-            <CheckCheck
-              className={`size-3.5 ${fullTickClassName}`}
-              strokeWidth={READ_TICK_STROKE}
-              role="img"
-              aria-label="Read"
-            />
-          ) : message.status === "delivered" ? (
-            <CheckCheck className={`size-3.5 ${dimTickClassName}`} role="img" aria-label="Delivered" />
-          ) : (
-            <Check className={`size-3.5 ${dimTickClassName}`} role="img" aria-label="Sent" />
-          )}
-        </span>
-      )}
+      {isMine && <MessageTicks status={message.status} surface={isOnPrimary ? "primary" : "base"} />}
     </span>
   );
 };
