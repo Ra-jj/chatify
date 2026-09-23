@@ -1,70 +1,101 @@
+import { useState } from "react";
 import { X, Search, ArrowLeft } from "lucide-react";
 import { useAuthStore } from "../store/useAuthStore";
 import { useChatStore } from "../store/useChatStore";
-import { formatLastSeen } from "../lib/utils";
+import { formatLastSeen, formatMemberCount } from "../lib/utils";
+import Avatar from "./Avatar";
+import IconButton from "./IconButton";
+import SearchField from "./SearchField";
 
 const ChatHeader = () => {
   const { selectedUser, setSelectedUser, typingUsers, searchQuery, setSearchQuery, setSelectedProfileUser } = useChatStore();
   const { onlineUsers } = useAuthStore();
+  // Below the sm breakpoint the search field collapses to an icon and expands over the header
+  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
+
+  const isTyping = typingUsers?.includes(selectedUser._id);
+  const isOnline = onlineUsers.includes(selectedUser._id);
+
+  let statusText;
+  if (isTyping) statusText = <span className="text-primary-ink">typing…</span>;
+  else if (selectedUser.isGroup) statusText = formatMemberCount(selectedUser.members);
+  else if (isOnline) statusText = "Online";
+  else statusText = formatLastSeen(selectedUser.lastSeen);
+
+  const closeMobileSearch = () => {
+    setSearchQuery("");
+    setIsMobileSearchOpen(false);
+  };
 
   return (
-    <div className="p-2.5 border-b border-base-300">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          {/* Mobile Back Button */}
-          <button 
-            className="sm:hidden text-base-content/70 hover:text-base-content" 
-            onClick={() => setSelectedUser(null)}
-          >
-            <ArrowLeft className="size-5" />
-          </button>
+    <header className="relative flex h-16 shrink-0 items-center gap-1 border-b border-base-content/10 bg-base-100 px-2 sm:gap-3 sm:px-4">
+      {/* Mobile back button */}
+      <IconButton
+        label="Back to chats"
+        icon={ArrowLeft}
+        onClick={() => setSelectedUser(null)}
+        className="md:hidden"
+        iconClassName="size-5"
+      />
 
-          {/* Clickable Profile Info */}
-          <div 
-            className="flex items-center gap-3 cursor-pointer hover:bg-base-300 p-2 rounded-lg transition-colors"
-            onClick={() => setSelectedProfileUser(selectedUser)}
-          >
-            {/* Avatar */}
-            <div className="avatar">
-              <div className="size-10 rounded-full relative">
-                <img src={selectedUser.profilePic || "/avatar.png"} alt={selectedUser.fullName} />
-              </div>
-            </div>
-
-            {/* User info */}
-            <div>
-              <h3 className="font-medium">{selectedUser.fullName}</h3>
-              <p className="text-sm text-base-content/70">
-                {typingUsers?.includes(selectedUser._id) 
-                  ? <span className="text-emerald-500 italic">typing...</span> 
-                  : onlineUsers.includes(selectedUser._id) 
-                    ? "Online" 
-                    : formatLastSeen(selectedUser.lastSeen)}
-              </p>
-            </div>
-          </div>
+      {/* Clickable profile info */}
+      <button
+        type="button"
+        onClick={() => setSelectedProfileUser(selectedUser)}
+        title={selectedUser.isGroup ? "View group info" : "View profile"}
+        className="flex min-w-0 flex-1 items-center gap-3 rounded-lg px-1.5 py-1 text-left transition-colors hover:bg-base-200 sm:flex-none"
+      >
+        <Avatar
+          src={selectedUser.profilePic}
+          isGroup={selectedUser.isGroup}
+          className="size-10"
+          iconClassName="size-[18px]"
+        />
+        <div className="min-w-0">
+          <h3 className="truncate text-[15px] font-semibold leading-tight">{selectedUser.fullName}</h3>
+          <p className="truncate text-[13px] leading-tight text-base-content/75">{statusText}</p>
         </div>
+      </button>
 
-        <div className="flex items-center gap-4">
-          {/* Search Input */}
-          <div className="relative hidden sm:flex items-center">
-            <Search className="size-4 absolute left-3 text-base-content/50" />
-            <input
-              type="text"
-              placeholder="Search chat..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="input input-sm input-bordered pl-9 w-40 sm:w-64 rounded-full"
-            />
-          </div>
+      <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
+        {/* Inline search from sm up */}
+        <SearchField
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search in chat"
+          className="hidden h-9 w-44 sm:flex lg:w-60"
+        />
 
-          {/* Close button */}
-          <button onClick={() => setSelectedUser(null)}>
-            <X />
-          </button>
-        </div>
+        <IconButton
+          label="Search in chat"
+          icon={Search}
+          onClick={() => setIsMobileSearchOpen(true)}
+          className={`sm:hidden ${searchQuery ? "text-primary-ink" : ""}`}
+        />
+
+        {/* Close button */}
+        <IconButton
+          label="Close chat"
+          icon={X}
+          onClick={() => setSelectedUser(null)}
+          className="hidden md:inline-flex"
+          iconClassName="size-5"
+        />
       </div>
-    </div>
+
+      {isMobileSearchOpen && (
+        <div className="absolute inset-0 flex items-center gap-1 bg-base-100 px-2 sm:hidden">
+          <IconButton label="Close search" icon={ArrowLeft} onClick={closeMobileSearch} iconClassName="size-5" />
+          <SearchField
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search in chat"
+            autoFocus
+            className="flex-1"
+          />
+        </div>
+      )}
+    </header>
   );
 };
 export default ChatHeader;

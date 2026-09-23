@@ -1,6 +1,14 @@
 import { useState } from "react";
 import { useAuthStore } from "../store/useAuthStore";
-import { Camera, Mail, User, X } from "lucide-react";
+import { Camera } from "lucide-react";
+import ImageLightbox from "../components/ImageLightbox";
+
+const formatMemberSince = (createdAt) => {
+  if (!createdAt) return "—";
+  const date = new Date(createdAt);
+  if (Number.isNaN(date.getTime())) return createdAt.split("T")[0];
+  return date.toLocaleDateString("en-US", { day: "numeric", month: "long", year: "numeric" });
+};
 
 const ProfilePage = () => {
   const { authUser, isUpdatingProfile, updateProfile } = useAuthStore();
@@ -22,110 +30,79 @@ const ProfilePage = () => {
     };
   };
 
+  const avatarSrc = selectedImg || authUser.profilePic || "/avatar.png";
+
   return (
     <>
-    <div className="min-h-screen pt-20">
-      <div className="max-w-2xl mx-auto p-4 py-8">
-        <div className="bg-base-300 rounded-xl p-6 space-y-8">
-          <div className="text-center">
-            <h1 className="text-2xl font-semibold ">Profile</h1>
-            <p className="mt-2">Your profile information</p>
-          </div>
-
-          {/* avatar upload section */}
-
-          <div className="flex flex-col items-center gap-4">
-            <div className="relative">
-              <img
-                src={selectedImg || authUser.profilePic || "/avatar.png"}
-                alt="Profile"
-                className="size-32 rounded-full object-cover border-4 cursor-pointer hover:opacity-80 transition-opacity"
-                onClick={() => setIsModalOpen(true)}
-              />
-              <label
-                htmlFor="avatar-upload"
-                className={`
-                  absolute bottom-0 right-0 
-                  bg-base-content hover:scale-105
-                  p-2 rounded-full cursor-pointer 
-                  transition-all duration-200
-                  ${isUpdatingProfile ? "animate-pulse pointer-events-none" : ""}
-                `}
-              >
-                <Camera className="w-5 h-5 text-base-200" />
-                <input
-                  type="file"
-                  id="avatar-upload"
-                  className="hidden"
-                  accept="image/*"
-                  onChange={handleImageUpload}
-                  disabled={isUpdatingProfile}
-                />
-              </label>
-            </div>
-            <p className="text-sm text-zinc-400">
-              {isUpdatingProfile ? "Uploading..." : "Click the camera icon to update your photo"}
-            </p>
-          </div>
-
-          <div className="space-y-6">
-            <div className="space-y-1.5">
-              <div className="text-sm text-zinc-400 flex items-center gap-2">
-                <User className="w-4 h-4" />
-                Full Name
+      <div className="min-h-[100dvh] bg-base-200/50 pt-14">
+        <div className="mx-auto max-w-md px-4 py-8 sm:py-14">
+          <div className="rounded-xl border border-base-content/10 bg-base-100 px-6 py-8 sm:px-8">
+            <div className="flex flex-col items-center text-center">
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(true)}
+                  aria-label="View profile photo"
+                  title="View profile photo"
+                  className="block rounded-full"
+                >
+                  <img
+                    src={avatarSrc}
+                    alt=""
+                    className="size-28 rounded-full border border-base-content/10 object-cover transition-opacity hover:opacity-90"
+                  />
+                </button>
+                <label
+                  htmlFor="avatar-upload"
+                  title="Change photo"
+                  className={`absolute bottom-0.5 right-0.5 flex size-9 cursor-pointer items-center justify-center rounded-full border-2 border-base-100 bg-primary text-primary-content transition-transform focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2 focus-within:ring-offset-base-100 motion-safe:hover:scale-105 ${
+                    isUpdatingProfile ? "pointer-events-none motion-safe:animate-pulse" : ""
+                  }`}
+                >
+                  <Camera className="size-4" aria-hidden="true" />
+                  <input
+                    type="file"
+                    id="avatar-upload"
+                    className="sr-only"
+                    accept="image/*"
+                    aria-label="Change profile photo"
+                    onChange={handleImageUpload}
+                    disabled={isUpdatingProfile}
+                  />
+                </label>
               </div>
-              <p className="px-4 py-2.5 bg-base-200 rounded-lg border">{authUser?.fullName}</p>
+
+              <h1 className="mt-5 text-xl font-semibold tracking-tight">{authUser?.fullName}</h1>
+              <p className="mt-0.5 text-[15px] text-base-content/75">{authUser?.email}</p>
+              <p className="mt-3 text-[13px] text-base-content/75">
+                {isUpdatingProfile ? "Uploading…" : "Use the camera button to change your photo"}
+              </p>
             </div>
 
-            <div className="space-y-1.5">
-              <div className="text-sm text-zinc-400 flex items-center gap-2">
-                <Mail className="w-4 h-4" />
-                Email Address
+            <dl className="mt-8 divide-y divide-base-content/10 border-t border-base-content/10 text-sm">
+              <div className="flex items-center justify-between gap-4 py-3">
+                <dt className="text-base-content/75">Member since</dt>
+                <dd className="font-medium">{formatMemberSince(authUser.createdAt)}</dd>
               </div>
-              <p className="px-4 py-2.5 bg-base-200 rounded-lg border">{authUser?.email}</p>
-            </div>
-          </div>
-
-          <div className="mt-6 bg-base-300 rounded-xl p-6">
-            <h2 className="text-lg font-medium  mb-4">Account Information</h2>
-            <div className="space-y-3 text-sm">
-              <div className="flex items-center justify-between py-2 border-b border-zinc-700">
-                <span>Member Since</span>
-                <span>{authUser.createdAt?.split("T")[0]}</span>
+              <div className="flex items-center justify-between gap-4 py-3">
+                <dt className="text-base-content/75">Account status</dt>
+                <dd className="flex items-center gap-2 font-medium">
+                  <span className="size-2 rounded-full bg-success" aria-hidden="true" />
+                  Active
+                </dd>
               </div>
-              <div className="flex items-center justify-between py-2">
-                <span>Account Status</span>
-                <span className="text-green-500">Active</span>
-              </div>
-            </div>
+            </dl>
           </div>
         </div>
       </div>
-    </div>
-    
-      {/* Full Size Image Modal */}
-      {isModalOpen && (
-        <div 
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" 
-          onClick={() => setIsModalOpen(false)}
-        >
-          <div className="relative max-w-4xl max-h-[90vh] flex flex-col items-center">
-            <button 
-              className="absolute -top-12 right-0 btn btn-circle btn-sm bg-base-300 hover:bg-base-200 border-none text-white" 
-              onClick={(e) => { e.stopPropagation(); setIsModalOpen(false); }}
-            >
-              <X className="size-5" />
-            </button>
-            <img 
-              src={selectedImg || authUser.profilePic || "/avatar.png"} 
-              alt="Profile Full Size" 
-              className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl"
-              onClick={(e) => e.stopPropagation()}
-            />
-          </div>
-        </div>
-      )}
 
+      {/* Full size image modal */}
+      <ImageLightbox
+        isOpen={isModalOpen}
+        src={avatarSrc}
+        alt="Profile photo, full size"
+        onClose={() => setIsModalOpen(false)}
+      />
     </>
   );
 };

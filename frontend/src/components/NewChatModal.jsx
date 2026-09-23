@@ -1,12 +1,13 @@
 import { useState } from "react";
-import { X, Search, MessagesSquare } from "lucide-react";
+import { SquarePen } from "lucide-react";
 import { useChatStore } from "../store/useChatStore";
+import ModalShell from "./ModalShell";
+import SearchField from "./SearchField";
+import Avatar from "./Avatar";
 
 const NewChatModal = ({ isOpen, onClose }) => {
   const { allUsers, setSelectedUser } = useChatStore();
   const [search, setSearch] = useState("");
-
-  if (!isOpen) return null;
 
   const filteredUsers = allUsers.filter((u) =>
     u.fullName.toLowerCase().includes(search.toLowerCase())
@@ -18,64 +19,43 @@ const NewChatModal = ({ isOpen, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-base-200 w-full max-w-md rounded-2xl shadow-xl flex flex-col max-h-[90vh]">
-        {/* Header */}
-        <div className="flex justify-between items-center p-5 border-b border-base-300">
-          <h2 className="text-xl font-bold flex items-center gap-2">
-            <MessagesSquare className="size-5 text-primary" />
-            New Chat
-          </h2>
-          <button onClick={onClose} className="btn btn-sm btn-circle btn-ghost">
-            <X className="size-5" />
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="p-5 overflow-y-auto flex-1 flex flex-col gap-4">
-          <div className="form-control">
-            <div className="relative mb-2">
-              <Search className="size-4 absolute left-3 top-3.5 text-base-content/50" />
-              <input
-                type="text"
-                placeholder="Search contacts..."
-                className="input input-sm input-bordered w-full pl-9"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                autoFocus
-              />
-            </div>
-            
-            <div className="flex flex-col gap-1 max-h-64 overflow-y-auto pr-2">
-              {filteredUsers.map((user) => (
-                <button
-                  key={user._id}
-                  onClick={() => handleSelectUser(user)}
-                  className="flex items-center gap-3 p-3 rounded-xl hover:bg-base-300 transition-colors w-full text-left"
-                >
-                  <div className="avatar">
-                    <div className="size-10 rounded-full">
-                      <img
-                        src={user.profilePic || "/avatar.png"}
-                        alt={user.fullName}
-                      />
-                    </div>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium truncate">{user.fullName}</div>
-                  </div>
-                </button>
-              ))}
-              {filteredUsers.length === 0 && (
-                <div className="text-center text-zinc-500 py-8 text-sm">
-                  No contacts found
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+    <ModalShell
+      isOpen={isOpen}
+      title="New chat"
+      icon={<SquarePen className="size-[18px] text-base-content/75" aria-hidden="true" />}
+      onClose={onClose}
+      footer={
+        <button type="button" onClick={onClose} className="btn btn-ghost btn-sm h-9 rounded-lg px-4 font-medium">
+          Cancel
+        </button>
+      }
+    >
+      <div className="sticky top-0 z-10 bg-base-100 px-5 pb-2 pt-4">
+        <SearchField
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search contacts"
+          autoFocus
+        />
       </div>
-    </div>
+
+      <div className="flex flex-col px-3 pb-3">
+        {filteredUsers.map((user) => (
+          <button
+            key={user._id}
+            type="button"
+            onClick={() => handleSelectUser(user)}
+            className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-base-200/60"
+          >
+            <Avatar src={user.profilePic} />
+            <span className="min-w-0 flex-1 truncate text-[15px] font-semibold">{user.fullName}</span>
+          </button>
+        ))}
+        {filteredUsers.length === 0 && (
+          <p className="py-10 text-center text-sm text-base-content/75">No contacts found</p>
+        )}
+      </div>
+    </ModalShell>
   );
 };
 

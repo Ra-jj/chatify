@@ -1,96 +1,90 @@
-import { X, Mail, Calendar } from "lucide-react";
 import { useState } from "react";
 import { useAuthStore } from "../store/useAuthStore";
 import { useChatStore } from "../store/useChatStore";
-import { formatLastSeen } from "../lib/utils";
+import { formatLastSeen, formatMemberCount } from "../lib/utils";
+import ModalShell from "./ModalShell";
+import Avatar from "./Avatar";
+import ImageLightbox from "./ImageLightbox";
 
 const ProfileModal = () => {
   const { selectedProfileUser, setSelectedProfileUser } = useChatStore();
   const { onlineUsers } = useAuthStore();
   const [showFullScreenPic, setShowFullScreenPic] = useState(false);
 
-  if (!selectedProfileUser) return null;
+  // The modal stays mounted so its exit animation can play; while closing, AnimatePresence
+  // keeps showing the content from the last render where a profile was selected.
+  const isGroup = Boolean(selectedProfileUser?.isGroup);
+  const isOnline = Boolean(selectedProfileUser) && onlineUsers.includes(selectedProfileUser._id);
+  const closeModal = () => setSelectedProfileUser(null);
+
+  let statusText = "";
+  if (selectedProfileUser) {
+    if (isGroup) statusText = formatMemberCount(selectedProfileUser.members);
+    else if (isOnline) statusText = "Online now";
+    else statusText = formatLastSeen(selectedProfileUser.lastSeen);
+  }
 
   return (
     <>
-      <div 
-        className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-        onClick={() => setSelectedProfileUser(null)}
+      <ModalShell
+        isOpen={Boolean(selectedProfileUser)}
+        title={isGroup ? "Group info" : "Contact info"}
+        onClose={closeModal}
+        onBackdropClick={closeModal}
+        zIndexClassName="z-[100]"
+        panelClassName="max-w-sm"
       >
-        <div 
-          className="bg-base-300 rounded-xl p-8 max-w-sm w-full relative shadow-2xl flex flex-col items-center"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <button 
-            className="absolute top-4 right-4 btn btn-circle btn-sm btn-ghost"
-            onClick={() => setSelectedProfileUser(null)}
-          >
-            <X className="size-5" />
-          </button>
-          
-          <img 
-            src={selectedProfileUser.profilePic || "/avatar.png"} 
-            alt={selectedProfileUser.fullName} 
-            className="size-40 rounded-full object-cover border-4 border-base-100 shadow-lg mb-6 cursor-pointer hover:opacity-80 transition-opacity"
-            onClick={() => {
-              if (selectedProfileUser.profilePic) {
-                setShowFullScreenPic(true);
-              }
-            }}
-          />
-          
-          <h2 className="text-2xl font-bold mb-1">{selectedProfileUser.fullName}</h2>
-          <p className="text-emerald-500 font-medium mb-6">
-            {onlineUsers.includes(selectedProfileUser._id) ? "Online now" : formatLastSeen(selectedProfileUser.lastSeen)}
-          </p>
+        {selectedProfileUser && (
+          <div className="flex flex-col items-center px-6 pb-6 pt-7 text-center">
+            <button
+              type="button"
+              aria-label="View photo full size"
+              title="View photo full size"
+              className="rounded-full transition-opacity hover:opacity-90 disabled:cursor-default disabled:hover:opacity-100"
+              disabled={!selectedProfileUser.profilePic}
+              onClick={() => {
+                if (selectedProfileUser.profilePic) {
+                  setShowFullScreenPic(true);
+                }
+              }}
+            >
+              <Avatar
+                src={selectedProfileUser.profilePic}
+                isGroup={isGroup}
+                className="size-28"
+                iconClassName="size-10"
+              />
+            </button>
 
-          <div className="w-full space-y-4">
-            <div className="flex items-center gap-3 bg-base-200 p-3 rounded-lg">
-              <Mail className="size-5 text-zinc-400" />
-              <div className="flex flex-col">
-                <span className="text-xs text-zinc-500 uppercase font-semibold">Email</span>
-                <span className="text-sm truncate">{selectedProfileUser.email}</span>
-              </div>
-            </div>
-            
-            <div className="flex items-center gap-3 bg-base-200 p-3 rounded-lg">
-              <Calendar className="size-5 text-zinc-400" />
-              <div className="flex flex-col">
-                <span className="text-xs text-zinc-500 uppercase font-semibold">Joined</span>
-                <span className="text-sm">
+            <h3 className="mt-4 text-xl font-semibold tracking-tight">{selectedProfileUser.fullName}</h3>
+            <p className="mt-1 flex items-center gap-1.5 text-[15px] text-base-content/75">
+              {isOnline && <span className="size-2 rounded-full bg-success" aria-hidden="true" />}
+              {statusText}
+            </p>
+
+            <dl className="mt-6 w-full divide-y divide-base-content/10 border-t border-base-content/10 text-sm">
+              <div className="flex items-center justify-between gap-4 py-3">
+                <dt className="text-base-content/75">{isGroup ? "Created" : "Joined"}</dt>
+                <dd className="font-medium">
                   {new Date(selectedProfileUser.createdAt).toLocaleDateString("en-US", {
                     month: "long",
                     year: "numeric"
                   })}
-                </span>
+                </dd>
               </div>
-            </div>
+            </dl>
           </div>
-        </div>
-      </div>
+        )}
+      </ModalShell>
 
       {/* Full Screen Image Modal */}
-      {showFullScreenPic && (
-        <div 
-          className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
-          onClick={() => setShowFullScreenPic(false)}
-        >
-          <div className="relative max-w-5xl w-full flex items-center justify-center h-full">
-            <button 
-              className="absolute top-4 right-4 p-2 bg-base-100 rounded-full hover:bg-base-200 transition-colors"
-              onClick={() => setShowFullScreenPic(false)}
-            >
-              <X className="size-6" />
-            </button>
-            <img 
-              src={selectedProfileUser.profilePic} 
-              alt="Full screen profile" 
-              className="max-h-full max-w-full object-contain rounded-lg shadow-2xl"
-              onClick={(e) => e.stopPropagation()} 
-            />
-          </div>
-        </div>
-      )}
+      <ImageLightbox
+        isOpen={showFullScreenPic && Boolean(selectedProfileUser?.profilePic)}
+        src={selectedProfileUser?.profilePic}
+        alt="Full screen profile"
+        onClose={() => setShowFullScreenPic(false)}
+        zIndexClassName="z-[110]"
+      />
     </>
   );
 };

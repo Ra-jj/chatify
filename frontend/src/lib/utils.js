@@ -21,3 +21,8 @@ export function formatLastSeen(dateString) {
     return `Last seen ${date.toLocaleDateString("en-US", { month: "short", day: "numeric" })} at ${date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}`;
   }
 }
+
+export function formatMemberCount(members) {
+  const count = members?.length || 0;
+  return `${count} ${count === 1 ? "member" : "members"}`;
+}
