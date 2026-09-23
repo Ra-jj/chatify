@@ -24,7 +24,7 @@ const TABS = [
 ];
 
 const Sidebar = ({ onNewChat, onNewGroup }) => {
-  const { getUsers, users, groups, selectedUser, setSelectedUser, isUsersLoading, setSelectedProfileUser } = useChatStore();
+  const { getUsers, users, groups, groupUnread, selectedUser, setSelectedUser, isUsersLoading, setSelectedProfileUser } = useChatStore();
   const { onlineUsers } = useAuthStore();
   const [showOnlineOnly, setShowOnlineOnly] = useState(false);
   const [activeTab, setActiveTab] = useState("all"); // 'all', 'chats', 'groups'
@@ -40,12 +40,20 @@ const Sidebar = ({ onNewChat, onNewGroup }) => {
       isGroup: true,
       fullName: g.name,
       profilePic: g.groupImage || null,
-      unreadCount: 0, // Groups don't have unread count built-in yet
+      // Counted in the store from live messages; the server keeps no unread state for groups
+      unreadCount: groupUnread[g._id] || 0,
     }));
 
+    // A chat opened from New chat has no row until its first message is sent or received
+    // (the store adds one then). Until that, it is listed while it is open, and leaving it
+    // without a message leaves no trace.
+    const isOpenChatWithoutRow =
+      selectedUser && !selectedUser.isGroup && !users.some((user) => user._id === selectedUser._id);
+    const conversations = isOpenChatWithoutRow ? [...users, selectedUser] : users;
+
     let list = [];
-    if (activeTab === "all") list = [...users, ...formattedGroups];
-    else if (activeTab === "chats") list = [...users];
+    if (activeTab === "all") list = [...conversations, ...formattedGroups];
+    else if (activeTab === "chats") list = [...conversations];
     else if (activeTab === "groups") list = [...formattedGroups];
 
     if (showOnlineOnly && activeTab !== "groups") {
@@ -54,7 +62,7 @@ const Sidebar = ({ onNewChat, onNewGroup }) => {
 
     // Sort: you might want to sort by latest message in future, but for now just alphabet or users then groups
     return list;
-  }, [users, groups, activeTab, showOnlineOnly, onlineUsers]);
+  }, [users, groups, groupUnread, selectedUser, activeTab, showOnlineOnly, onlineUsers]);
 
   // On phones the list gives way to the open chat; from md up both sit side by side
   const asideClassName = `${selectedUser ? "hidden md:flex" : "flex"} h-full w-full shrink-0 flex-col border-r border-base-content/10 md:w-72 lg:w-80`;

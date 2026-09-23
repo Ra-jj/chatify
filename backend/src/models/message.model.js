@@ -65,6 +65,16 @@ const messageSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// deletedFor lists who hid a message "for me". Queries on the server filter by it, but it never
+// leaves the server: the other person could otherwise tell their message was hidden. res.json()
+// and socket.io both serialize documents through toJSON, so this covers every response and emit.
+messageSchema.set("toJSON", {
+  transform: (_document, serializedMessage) => {
+    delete serializedMessage.deletedFor;
+    return serializedMessage;
+  },
+});
+
 const Message = mongoose.model("Message", messageSchema);
 
 export default Message;
