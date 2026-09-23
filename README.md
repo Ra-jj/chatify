@@ -37,7 +37,7 @@
 - **Online presence** — See who's currently active with real-time last seen timestamps
 
 ### 🎨 UI & Experience
-- **30+ themes** — Choose from a rich set of DaisyUI themes including the custom Chatify dark theme
+- **10 curated themes** — Choose from a handpicked set of DaisyUI themes including the custom Chatify dark theme
 - **Responsive design** — Works seamlessly on desktop, tablet, and mobile
 - **Profile management** — Update your display picture, view other users' profiles
 - **PWA support** — Installable as a Progressive Web App with push notifications
