@@ -17,11 +17,21 @@ import { app, server } from "./lib/socket.js";
 const PORT = process.env.PORT;
 const __dirname = path.resolve();
 
-// Production runs behind Render's proxy. Trusting one proxy hop makes req.ip the client's
-// address, so rate limits are counted per client instead of once for the proxy.
-// The hop count of 1 has not been checked on Render. Check it there (for example, log
-// req.ip and X-Forwarded-For for one request) and set this to the real number of hops.
-app.set("trust proxy", 1);
+// Production traffic reaches the app through Cloudflare and then Render's internal proxies
+// (10.x addresses). req.ip must be the visitor's address or the rate limiters count everyone
+// together. Trusting those proxies by address, not by hop count, makes Express walk
+// X-Forwarded-For from the right and stop at the first address that is not one of them: the
+// real client. Entries a client adds to the header sit further left and are never reached.
+// Cloudflare ranges from https://www.cloudflare.com/ips-v4 and /ips-v6 (fetched 2026-09-24).
+const CLOUDFLARE_IP_RANGES = [
+  "173.245.48.0/20", "103.21.244.0/22", "103.22.200.0/22", "103.31.4.0/22",
+  "141.101.64.0/18", "108.162.192.0/18", "190.93.240.0/20", "188.114.96.0/20",
+  "197.234.240.0/22", "198.41.128.0/17", "162.158.0.0/15", "104.16.0.0/13",
+  "104.24.0.0/14", "172.64.0.0/13", "131.0.72.0/22",
+  "2400:cb00::/32", "2606:4700::/32", "2803:f800::/32", "2405:b500::/32",
+  "2405:8100::/32", "2a06:98c0::/29", "2c0f:f248::/32",
+];
+app.set("trust proxy", ["loopback", "linklocal", "uniquelocal", ...CLOUDFLARE_IP_RANGES]);
 
 app.use(
   helmet({
