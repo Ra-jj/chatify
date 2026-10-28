@@ -8,7 +8,7 @@ import MessageTicks from "./chat/MessageTicks";
 const MOCK_MESSAGES = [
   { id: 1, isMine: false, text: "Are we still on for Saturday?", time: "18:02" },
   { id: 2, isMine: true, text: "Yes! Booked a table for eight", time: "18:03", isRead: true },
-  { id: 3, isMine: false, text: "Perfect. I'll bring the photos from the trip", time: "18:04", reaction: "❤️" },
+  { id: 3, isMine: false, text: "Perfect. I'll bring the trip photos", time: "18:04", reaction: "❤️" },
   { id: 4, isMine: true, text: "Can't wait to see them", time: "18:04", isRead: true },
 ];
 

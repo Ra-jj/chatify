@@ -402,6 +402,8 @@ export const useChatStore = create((set, get) => ({
         if (!isGroupMessage) {
           // A chat opened from New chat gets its row now that a message exists
           get().addConversation(selectedUser);
+          // Counted like any other DM (the open chat hides its badge), so a failed read leaves it counted
+          get().bumpUnreadCount(newMessage.senderId);
           get().markMessagesAsRead(newMessage.senderId);
         }
       },

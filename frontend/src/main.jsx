@@ -14,7 +14,9 @@ if ("serviceWorker" in navigator) {
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
-    <BrowserRouter>
+    {/* Opts in to the v7 behaviour now, which also silences the dev-console warnings. No
+        route is a splat (*) route, so relative links resolve the same either way. */}
+    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <MotionProvider>
         <App />
       </MotionProvider>
