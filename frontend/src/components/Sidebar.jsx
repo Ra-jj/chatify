@@ -190,7 +190,10 @@ const Sidebar = ({ onNewChat, onNewGroup }) => {
                           : "Offline"}
                     </div>
                   </div>
-                  {item.unreadCount > 0 && (
+                  {/* The open chat shows no badge, so it goes the moment the chat is selected.
+                      A DM's count itself is only cleared once its messages load and the server
+                      accepts the read, so leaving before that, or a failed read, brings it back. */}
+                  {item.unreadCount > 0 && !isActive && (
                     <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-content">
                       {item.unreadCount}
                     </span>

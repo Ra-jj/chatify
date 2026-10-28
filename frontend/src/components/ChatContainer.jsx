@@ -82,7 +82,8 @@ const ChatContainer = () => {
     const container = scrollRef.current;
     if (!anchor || !container) return;
 
-    // While only the spinner has appeared nothing is prepended yet, and the spinner stays in view
+    // While only the spinner has appeared nothing is prepended yet. It floats over the list,
+    // so it moves nothing either.
     const hasPrepended = messages[0]?._id !== anchor.oldestMessageId;
     if (hasPrepended) {
       const anchorElement = container.querySelector(`[data-message-id="${anchor.messageId}"]`);
@@ -92,8 +93,7 @@ const ChatContainer = () => {
       }
     }
 
-    // The spinner can leave in a later render than the page arrives, so the anchor is
-    // applied again then, and dropped only once loading is over
+    // Dropped only once loading is over, which can be a render after the page arrives
     if (!isLoadingOlderMessages) scrollAnchorRef.current = null;
   }, [messages, isLoadingOlderMessages]);
 
@@ -169,12 +169,6 @@ const ChatContainer = () => {
           ref={scrollRef}
           onScroll={handleScroll}
         >
-          {isLoadingOlderMessages && (
-            <div className="my-2 flex justify-center">
-              <Loader2 className="size-5 text-base-content/60 motion-safe:animate-spin" aria-label="Loading older messages" />
-            </div>
-          )}
-
           {filteredMessages.length === 0 && searchQuery && (
             <div className="mx-auto mt-4 w-fit max-w-full truncate rounded-full border border-base-content/10 bg-base-100 px-4 py-1.5 text-[13px] text-base-content/75">
               No messages match &quot;{searchQuery}&quot;
@@ -356,6 +350,16 @@ const ChatContainer = () => {
             );
           })}
         </div>
+
+        {/* Floats over the list instead of sitting in it, so showing it never pushes the
+            messages being read down. At the top of the list it covers only the top padding. */}
+        {isLoadingOlderMessages && (
+          <div className="pointer-events-none absolute inset-x-0 top-1.5 flex justify-center">
+            <span className="rounded-full border border-base-content/10 bg-base-100 p-1 shadow-sm">
+              <Loader2 className="size-5 text-base-content/60 motion-safe:animate-spin" aria-label="Loading older messages" />
+            </span>
+          </div>
+        )}
       </div>
 
       <MessageInput />
