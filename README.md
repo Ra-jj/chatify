@@ -1,7 +1,7 @@
 # 💬 Chatify
 
 <div align="center">
-  <img src="frontend/public/screenshot-for-readme.png" alt="Chatify App Preview" />
+  <img src="docs/screenshots/home-dark.png" alt="Chatify in its default dark theme: the chat list with online status and an unread badge, next to an open conversation with a reply, reactions and read receipts" />
 
   <p>A modern real-time chat application built with the MERN stack and Socket.io.</p>
 
@@ -43,6 +43,29 @@
 - **PWA support** — Installable as a Progressive Web App with push notifications
 - **In-chat search** — Search through messages within a conversation
 
+## 📸 Screenshots
+
+<table>
+  <tr>
+    <td width="50%" align="center" valign="top">
+      <img src="docs/screenshots/home-light.png" alt="The same chat list and conversation in the light theme" width="100%" />
+      <br />
+      <sub>Light theme</sub>
+    </td>
+    <td width="50%" align="center" valign="top">
+      <img src="docs/screenshots/login.png" alt="Sign-in page with an email and password form beside an animated chat preview" width="100%" />
+      <br />
+      <sub>Sign-in page</sub>
+    </td>
+  </tr>
+</table>
+
+<p align="center">
+  <img src="docs/screenshots/mobile.png" alt="Chatify on a phone: a conversation open full screen with a reply, a reaction and read receipts" width="300" />
+  <br />
+  <sub>On a phone, the open chat fills the screen</sub>
+</p>
+
 ## 🛠️ Tech Stack
 
 | Layer              | Technology                                    |
@@ -69,7 +92,7 @@ Make sure you have the following installed:
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/your-username/chatify.git
+git clone https://github.com/Ra-jj/chatify.git
 cd chatify
 ```
 
@@ -161,7 +184,7 @@ chatify/
 │   └── src/
 │       ├── controllers/     # Route handlers (auth, messages, groups)
 │       ├── lib/             # DB connection, Cloudinary, Socket.io, utilities
-│       ├── middleware/       # JWT authentication middleware
+│       ├── middleware/       # JWT authentication and rate limiting
 │       ├── models/           # Mongoose schemas (User, Message, Group)
 │       ├── routes/           # Express route definitions
 │       └── index.js          # Server entry point
@@ -180,4 +203,4 @@ chatify/
 
 ## 📄 License
 
-This project is licensed under the ISC License. See the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
