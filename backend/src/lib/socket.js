@@ -15,7 +15,7 @@ const io = new Server(server, {
 });
 
 // used to store online users: Map<userId, Set<socketId>>, one socket id per open tab
-export const userSocketMap = new Map();
+const userSocketMap = new Map();
 
 export function isUserOnline(userId) {
   if (!userId) return false;

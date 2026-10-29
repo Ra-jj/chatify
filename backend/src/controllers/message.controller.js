@@ -23,7 +23,7 @@ const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}(T[\d:.]+(Z|[+-]\d{2}:\d{2})?)?$/;
 const MAX_PUSH_SUBSCRIPTIONS_PER_USER = 5;
 const MAX_PUSH_ENDPOINT_LENGTH = 2048;
 const MAX_PUSH_KEY_LENGTH = 512;
-// Must match EMOJIS in frontend/src/components/ChatContainer.jsx
+// Must match EMOJIS in frontend/src/components/chat/MessageActions.jsx
 const ALLOWED_REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 
 const isProvided = (value) => value !== undefined && value !== null && value !== "";

@@ -60,7 +60,6 @@ const Sidebar = ({ onNewChat, onNewGroup }) => {
       list = list.filter((item) => item.isGroup || onlineUsers.includes(item._id));
     }
 
-    // Sort: you might want to sort by latest message in future, but for now just alphabet or users then groups
     return list;
   }, [users, groups, groupUnread, selectedUser, activeTab, showOnlineOnly, onlineUsers]);
 
