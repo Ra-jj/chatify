@@ -78,21 +78,16 @@ export const signup = async (req, res) => {
       sessionId,
     });
 
-    if (newUser) {
-      // generate jwt token here
-      generateToken(newUser._id, res, sessionId);
-      await newUser.save();
+    generateToken(newUser._id, res, sessionId);
+    await newUser.save();
 
-      res.status(201).json({
-        _id: newUser._id,
-        fullName: newUser.fullName,
-        email: newUser.email,
-        profilePic: newUser.profilePic,
-        createdAt: newUser.createdAt,
-      });
-    } else {
-      res.status(400).json({ message: "Invalid user data" });
-    }
+    res.status(201).json({
+      _id: newUser._id,
+      fullName: newUser.fullName,
+      email: newUser.email,
+      profilePic: newUser.profilePic,
+      createdAt: newUser.createdAt,
+    });
   } catch (error) {
     console.log("Error in signup controller", error.message);
     res.status(500).json({ message: "Internal Server Error" });
